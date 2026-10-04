@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The same background the dark theme draws, so the first frame does not flash white. -->
+    <color name="app_background">#0F1115</color>
+</resources>

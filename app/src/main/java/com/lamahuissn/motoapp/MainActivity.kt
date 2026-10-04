@@ -4,9 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lamahuissn.motoapp.ui.AreasScreen
 import com.lamahuissn.motoapp.ui.HousesScreen
@@ -22,6 +26,10 @@ import com.lamahuissn.motoapp.ui.theme.MotoAppTheme
  * a reading and a collection from a house — so they are Composed here from one state holder rather
  * than being separate activities. A phone carried from a door to an office keeps one signed-in
  * session, one HTTP client and one cache.
+ *
+ * Everything sits on a `Surface` painted with the theme's background: the window behind Compose is
+ * the platform's, and a screen that relies on it comes out the colour of the window (the first build
+ * showed exactly that, as a sheet of brand blue behind the login fields).
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,8 +38,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MotoAppTheme {
-                val model: MotoViewModel = viewModel()
-                MotoApp(model)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    val model: MotoViewModel = viewModel()
+                    MotoApp(model)
+                }
             }
         }
     }

@@ -45,9 +45,10 @@ import com.lamahuissn.motoapp.data.MotoApi
 /**
  * The door.
  *
- * A collector signs in once per phone: the identity is a username or an address, read exactly the way
- * the panel reads it (the server strips the invisible characters a phone keyboard leaves behind), so
- * what he types on a phone keyboard is what he types on a laptop.
+ * One card on the app's own background — not fields floating on the brand colour (the first build let
+ * the window's blue show through and the screen came out as a sheet of blue). A collector signs in
+ * once per phone: the identity is a username or an address, read exactly the way the panel reads it,
+ * so what he types on a phone keyboard is what he types on a laptop.
  */
 @Composable
 fun LoginScreen(
@@ -64,14 +65,16 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 20.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        Spacer(Modifier.height(12.dp))
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)),
+                    .size(60.dp)
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -82,65 +85,75 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(16.dp))
 
             Column {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.displaySmall)
                 Text(
                     text = stringResource(R.string.app_tagline),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        Text(
-            text = stringResource(R.string.login_title),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        MotoCard {
+            Text(stringResource(R.string.login_title), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(14.dp))
 
-        OutlinedTextField(
-            value = identity,
-            onValueChange = { identity = it },
-            label = { Text(stringResource(R.string.login_identity)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            // Phone keyboards insert invisible characters and capitalise addresses; the server cleans
-            // them, but the keyboard should not be typing them in the first place.
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                imeAction = ImeAction.Next,
-            ),
-        )
+            OutlinedTextField(
+                value = identity,
+                onValueChange = { identity = it },
+                label = { Text(stringResource(R.string.login_identity)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                // Phone keyboards insert invisible characters and capitalise addresses; the server
+                // cleans them, but the keyboard should not be typing them in the first place.
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                    imeAction = ImeAction.Next,
+                ),
+            )
 
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text(stringResource(R.string.login_password)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { if (canSubmit) onSignIn(identity, password) }),
-        )
+            Spacer(Modifier.height(10.dp))
 
-        Button(
-            onClick = { onSignIn(identity, password) },
-            enabled = canSubmit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-        ) {
-            if (busy) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-            } else {
-                Text(stringResource(R.string.login_button), style = MaterialTheme.typography.labelLarge)
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text(stringResource(R.string.login_password)) },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { if (canSubmit) onSignIn(identity, password) }),
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Button(
+                onClick = { onSignIn(identity, password) },
+                enabled = canSubmit,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text(stringResource(R.string.login_button), style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
 
@@ -152,11 +165,21 @@ fun LoginScreen(
             )
         }
 
-        Text(
-            text = stringResource(R.string.server_label) + ": " + MotoApi.baseUrl,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(R.string.server_label),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = MotoApi.baseUrl,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

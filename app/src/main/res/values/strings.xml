@@ -52,6 +52,15 @@
     <string name="house_estimated">تقديري</string>
     <string name="house_previous">السابق: %1$s</string>
 
+    <!-- شرائح الملخص والعناوين -->
+    <string name="areas_section">المناطق</string>
+    <string name="houses_section">البيوت</string>
+    <string name="strip_areas">المناطق</string>
+    <string name="strip_houses">البيوت</string>
+    <string name="strip_readings">القراءة</string>
+    <string name="strip_house_read">مقروء</string>
+    <string name="strip_owing">عليه دين</string>
+
     <!-- مشاكل الردّ -->
     <string name="problem_unreachable">لم يصل الهاتف إلى الخادم — تحقّق من الشبكة ثم أعِد المحاولة.</string>
     <string name="problem_unreadable">أجاب الخادم بردّ لا يعرفه التطبيق — أبلغ المكتب بالرمز المذكور.</string>

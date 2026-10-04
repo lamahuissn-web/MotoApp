@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The colour of the window before Compose draws: brand blue, so opening the app looks like the app. -->
-    <color name="splash_background">#009EF7</color>
+    <!--
+        The colour the window wears before Compose draws its first frame — and the colour that shows
+        through anywhere a screen forgets to paint itself. It is the app's own background, NOT the
+        brand blue: the first build set it to the splash colour and the login screen came out as a full
+        sheet of blue with fields floating on it (seen on the office's phone, 2026-10-04).
+    -->
+    <color name="app_background">#F1F4F9</color>
     <color name="ic_launcher_background">#0B1B2B</color>
 </resources>
