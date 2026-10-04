@@ -127,6 +127,17 @@ fun HouseScreen(
                 ) {
                     HouseFacts(load.value)
 
+                    // A refresh that failed while he is looking at figures he already had: say so
+                    // rather than let him read a balance that may be a minute old as if it were now.
+                    if (problem != null) {
+                        ProblemCard(
+                            title = stringResource(R.string.house_stale_title),
+                            message = problem.message,
+                            code = problem.code,
+                            onRetry = onRetryLoad,
+                        )
+                    }
+
                     // One row, two halves: the two things a collector does at a door, side by side, so
                     // the screen does not read as a stack of full-width bars.
                     Row(

@@ -101,6 +101,22 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     /** The attempt whose answer is not known yet, kept across retries (see this class's docblock). */
     private var pending: Attempt? = null
 
+    /**
+     * What the last successful read answered, kept in MEMORY only, for as long as this session lives.
+     *
+     * A collector walks back and forth through the same streets: he opens an area, goes into a house,
+     * comes back, opens the next one. Re-reading what he read thirty seconds ago is what makes the app
+     * feel slow, so a screen he has already seen opens instantly from here while the same request goes
+     * out quietly behind it — the phone shows the office's last answer, then the office's current one,
+     * and never a spinner over data it already has.
+     *
+     * It is deliberately not written to the phone: a copy of the office's money on disk outlives the
+     * session, and a stale figure on a house door is worse than a half-second wait.
+     */
+    private var boardCache: AreasBoard? = null
+    private val sheetCache = HashMap<Int, AreaSheet>()
+    private val houseCache = HashMap<Int, House>()
+
     init {
         // A collector who signed in yesterday opens the sheet he is about to walk, not a login box.
         if (_session.value != null) {
@@ -139,6 +155,9 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
         vault.clear()
         _session.value = null
+        boardCache = null
+        sheetCache.clear()
+        houseCache.clear()
         _board.value = Load.Idle
         _sheet.value = Load.Idle
         _house.value = Load.Idle
@@ -157,19 +176,24 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     fun loadAreas() {
         val token = _session.value?.token ?: return
 
-        _board.value = Load.Busy
+        // Whatever the office answered last is on screen at once; the fresh answer replaces it when it
+        // arrives. A spinner only ever appears over a screen this session has never read.
+        boardCache?.let { _board.value = Load.Ready(it) } ?: run { _board.value = Load.Busy }
         _problem.value = null
 
         viewModelScope.launch {
             when (val call = MotoApi.areas(token)) {
                 is ApiCall.Success -> {
+                    boardCache = call.value
                     _board.value = Load.Ready(call.value)
                     _lbpRate.value = call.value.lbpRate
                 }
 
                 else -> {
                     _problem.value = problem(call)
-                    _board.value = Load.Failed(_problem.value?.message)
+                    if (boardCache == null) {
+                        _board.value = Load.Failed(_problem.value?.message)
+                    }
                 }
             }
         }
@@ -186,19 +210,22 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         val id = routeId ?: (screen.value as? Screen.Houses)?.areaId ?: return
         val token = _session.value?.token ?: return
 
-        _sheet.value = Load.Busy
+        sheetCache[id]?.let { _sheet.value = Load.Ready(it) } ?: run { _sheet.value = Load.Busy }
         _problem.value = null
 
         viewModelScope.launch {
             when (val call = MotoApi.houses(token, id)) {
                 is ApiCall.Success -> {
+                    sheetCache[id] = call.value
                     _sheet.value = Load.Ready(call.value)
                     call.value.lbpRate?.let { _lbpRate.value = it }
                 }
 
                 else -> {
                     _problem.value = problem(call)
-                    _sheet.value = Load.Failed(_problem.value?.message)
+                    if (sheetCache[id] == null) {
+                        _sheet.value = Load.Failed(_problem.value?.message)
+                    }
                 }
             }
         }
@@ -220,15 +247,21 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         val id = houseId ?: (screen.value as? Screen.House)?.houseId ?: return
         val token = _session.value?.token ?: return
 
-        _house.value = Load.Busy
+        houseCache[id]?.let { _house.value = Load.Ready(it) } ?: run { _house.value = Load.Busy }
         _problem.value = null
 
         viewModelScope.launch {
             when (val call = MotoApi.house(token, id)) {
-                is ApiCall.Success -> _house.value = Load.Ready(call.value)
+                is ApiCall.Success -> {
+                    houseCache[id] = call.value
+                    _house.value = Load.Ready(call.value)
+                }
+
                 else -> {
                     _problem.value = problem(call)
-                    _house.value = Load.Failed(_problem.value?.message)
+                    if (houseCache[id] == null) {
+                        _house.value = Load.Failed(_problem.value?.message)
+                    }
                 }
             }
         }
