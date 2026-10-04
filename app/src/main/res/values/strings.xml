@@ -6,20 +6,55 @@
     اليسار، فانكسرت الجملة العربية القادمة من الخادم (النقطة في أول السطر التالي). الجابي يقرأ ورقة
     إلى بيتٍ عربي، فلا يجوز أن يغيّر هاتفٌ لغته إنجليزية شكل المخاطبة.
 
-    ما بقي بالإنجليزية هنا هو ما لا يُترجَم: اسم التطبيق، وعنوان الخادم، ورموز الردّ الآلية التي
-    يقرأها من يصلح العطل.
+    ما بقي بالإنجليزية هنا هو ما لا يُترجَم: اسم التطبيق، وعنوان الخادم، ورموز الردّ الآلية.
 -->
 <resources>
     <string name="app_name" translatable="false">MotoApp</string>
     <string name="app_tagline">هاتف الجابي والمدير</string>
     <string name="brand_mark_description">شعار التطبيق</string>
     <string name="server_label">عنوان الخادم</string>
-    <string name="probe_button">افحص الاتصال بالخادم</string>
-    <string name="probe_running">يتكلّم مع الخادم…</string>
-    <string name="result_answer_title">أجاب الخادم (HTTP %1$d)</string>
-    <string name="result_code_label">الرمز: %1$s</string>
-    <string name="result_unreachable_title">لم يصل الهاتف إلى الخادم</string>
-    <string name="result_unreachable_body">السبب: %1$s</string>
-    <string name="result_unexpected_body">الردّ ليس بالشكل الذي يعرفه التطبيق — أبلغ المكتب به.</string>
-    <string name="next_slice">هذه أول شاشة: تُثبت أن الهاتف يصل إلى خادم المكتب. ورقة الجابي، والقراءة، والقبض، والإيصال تُبنى عليها.</string>
+    <string name="back">رجوع</string>
+    <string name="cancel">إلغاء</string>
+    <string name="refresh">تحديث</string>
+
+    <!-- الدخول -->
+    <string name="login_title">تسجيل الدخول</string>
+    <string name="login_identity">اسم المستخدم أو البريد الإلكتروني</string>
+    <string name="login_password">كلمة المرور</string>
+    <string name="login_button">دخول</string>
+    <string name="login_failed_title">لم يُقبل الدخول</string>
+
+    <!-- المناطق -->
+    <string name="areas_title">مناطق المكتب</string>
+    <string name="areas_period">دورة %1$s</string>
+    <string name="areas_empty">لا مناطق بعد — أضِف المناطق والمشتركين من لوحة المكتب.</string>
+    <string name="areas_failed_title">تعذّر عرض المناطق</string>
+    <string name="area_houses">%1$d بيت</string>
+    <string name="area_owed">المستحق</string>
+    <string name="area_reading_done">قُرئ الجميع</string>
+    <string name="area_reading_left">قُرئ %1$d من %2$d</string>
+    <string name="sign_out">تسجيل الخروج</string>
+    <string name="sign_out_confirm">يُلغى توكن هذا الهاتف على الخادم أيضاً، فتحتاج إلى الدخول من جديد بعده.</string>
+
+    <!-- بيوت المنطقة -->
+    <string name="houses_period">دورة %1$s</string>
+    <string name="houses_empty">لا بيوت في هذه المنطقة.</string>
+    <string name="houses_failed_title">تعذّر عرض البيوت</string>
+    <string name="house_metered">عدّاد</string>
+    <string name="house_flat">رسم ثابت</string>
+    <string name="house_exempt">معفى</string>
+    <string name="house_balance">المتبقي عليه</string>
+    <string name="house_credit">بقي له عندنا</string>
+    <string name="house_months">الأشهر غير المدفوعة</string>
+    <string name="house_not_billed">لا فاتورة لهذا الشهر بعد — لا شيء يُقبض.</string>
+    <string name="house_reading_done">قُرئ: %1$s</string>
+    <string name="house_not_read">لم يُقرأ بعد</string>
+    <string name="house_estimated">تقديري</string>
+    <string name="house_previous">السابق: %1$s</string>
+
+    <!-- مشاكل الردّ -->
+    <string name="problem_unreachable">لم يصل الهاتف إلى الخادم — تحقّق من الشبكة ثم أعِد المحاولة.</string>
+    <string name="problem_unreadable">أجاب الخادم بردّ لا يعرفه التطبيق — أبلغ المكتب بالرمز المذكور.</string>
+    <string name="problem_server_refused">رفض الخادم الطلب بلا سبب مكتوب.</string>
+    <string name="problem_unexpected">صار خطأ غير متوقع في التطبيق — أبلغ المكتب.</string>
 </resources>
