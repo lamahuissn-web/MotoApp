@@ -2,6 +2,7 @@ package com.lamahuissn.motoapp.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -158,31 +159,6 @@ fun Chip(
     }
 }
 
-/** A label above its figure: the shape every number on these screens takes. */
-@Composable
-fun Fact(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    tone: Tone = Tone.Neutral,
-    emphasize: Boolean = false,
-) {
-    Column(modifier = modifier) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        Text(
-            text = value,
-            style = if (emphasize) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleMedium,
-            color = toneInk(tone),
-            maxLines = 1,
-        )
-    }
-}
-
 /** A heading over a group of cards — the panel has these, and a list without one looks like a dump. */
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
@@ -190,7 +166,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
         text = text,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+        modifier = modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 2.dp),
     )
 }
 
@@ -210,7 +186,13 @@ fun LeadingMark(icon: ImageVector, tone: Tone = Tone.Info, modifier: Modifier = 
     }
 }
 
-/** The first letters of a household's name, so a card is recognisable at a glance in a list. */
+/**
+ * The first letters of a household's name, so a card is recognisable at a glance in a list.
+ *
+ * «بيت» and «منزل» are dropped before the initials are taken: every house in an area is called «بيت
+ * فلان», so including it made every circle read «بف» — eleven identical avatars is not a mark, it is
+ * noise.
+ */
 @Composable
 fun Avatar(name: String, tone: Tone = Tone.Info, modifier: Modifier = Modifier) {
     val (container, content) = toneColours(tone)
@@ -231,12 +213,18 @@ fun Avatar(name: String, tone: Tone = Tone.Info, modifier: Modifier = Modifier) 
     }
 }
 
-fun initials(name: String): String = name.trim()
-    .split(" ")
-    .filter { it.isNotBlank() }
-    .take(2)
-    .map { it.take(1) }
-    .joinToString("")
+fun initials(name: String): String {
+    val words = name.trim()
+        .split(" ")
+        .filter { it.isNotBlank() && it !in setOf("بيت", "منزل", "شقة", "محل") }
+
+    // «ال» is dropped too: «النور» and «الشارع» both starting with «ا» would make two different shops
+    // wear the same circle. The definite article is grammar, not a name.
+    return words.take(2)
+        .map { word -> word.removePrefix("ال").take(1).ifEmpty { word.take(1) } }
+        .joinToString("")
+        .ifEmpty { name.trim().removePrefix("ال").take(1) }
+}
 
 /** One tile of a summary strip: a label and a figure, quieter than a card but not a heading. */
 @Composable
@@ -246,9 +234,11 @@ fun SummaryTile(label: String, value: String, tone: Tone = Tone.Neutral, modifie
     Column(
         modifier = modifier
             .background(container, MaterialTheme.shapes.medium)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = content, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.titleLarge,

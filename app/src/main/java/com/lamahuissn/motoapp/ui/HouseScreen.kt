@@ -17,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ElectricMeter
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumTopAppBar
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -125,35 +123,48 @@ fun HouseScreen(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     HouseFacts(load.value)
 
-                    if (load.value.isMetered) {
-                        Button(
-                            onClick = { sheet = Sheet.Reading },
-                            enabled = !busy,
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                        ) {
-                            Icon(Icons.Filled.ElectricMeter, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.house_action_read), style = MaterialTheme.typography.labelLarge)
+                    // One row, two halves: the two things a collector does at a door, side by side, so
+                    // the screen does not read as a stack of full-width bars.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (load.value.isMetered) {
+                            Button(
+                                onClick = { sheet = Sheet.Reading },
+                                enabled = !busy,
+                                shape = MaterialTheme.shapes.medium,
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                                modifier = Modifier.weight(1f).height(52.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.house_action_read),
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+                        }
+
+                        if (load.value.owes) {
+                            Button(
+                                onClick = { sheet = Sheet.Collection },
+                                enabled = !busy,
+                                shape = MaterialTheme.shapes.medium,
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                                modifier = Modifier.weight(1f).height(52.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.house_action_collect),
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
                         }
                     }
 
-                    if (load.value.owes) {
-                        Button(
-                            onClick = { sheet = Sheet.Collection },
-                            enabled = !busy,
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                        ) {
-                            Icon(Icons.Filled.Payments, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.house_action_collect), style = MaterialTheme.typography.labelLarge)
-                        }
-                    } else {
+                    if (!load.value.owes) {
                         Text(
                             text = stringResource(R.string.house_action_nothing),
                             style = MaterialTheme.typography.bodyMedium,
@@ -206,47 +217,44 @@ fun HouseScreen(
 @Composable
 private fun HouseFacts(house: House) {
     MotoCard {
+        // The name is already in the app bar; repeating it here only made the card taller than its
+        // content. What the collector needs on this line is the figure, on the far side of the card.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(
-                name = house.name,
-                tone = when {
-                    house.exempt -> Tone.Info
-                    house.owes -> Tone.Money
-                    else -> Tone.Good
-                },
-            )
-
-            Spacer(Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
-                Text(house.name, style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Chip(if (house.isMetered) stringResource(R.string.house_metered) else stringResource(R.string.house_flat))
-                    if (house.meterNo != null) Chip(house.meterNo)
-                    if (house.exempt) Chip(stringResource(R.string.house_exempt), Tone.Info)
+                Text(
+                    text = stringResource(R.string.house_balance),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = Money.usd(house.balance),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = if (house.owes) toneInk(Tone.Money) else toneInk(Tone.Neutral),
+                )
+            }
+
+            if (house.credit != "0.00") {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = stringResource(R.string.house_credit),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = Money.usd(house.credit),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = toneInk(Tone.Good),
+                    )
                 }
             }
         }
 
         Spacer(Modifier.height(14.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            Fact(
-                label = stringResource(R.string.house_balance),
-                value = Money.usd(house.balance),
-                tone = if (house.owes) Tone.Money else Tone.Neutral,
-                emphasize = true,
-                modifier = Modifier.weight(1f),
-            )
-            if (house.credit != "0.00") {
-                Fact(
-                    label = stringResource(R.string.house_credit),
-                    value = Money.usd(house.credit),
-                    tone = Tone.Good,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Chip(if (house.isMetered) stringResource(R.string.house_metered) else stringResource(R.string.house_flat))
+            if (house.meterNo != null) Chip(house.meterNo)
+            if (house.exempt) Chip(stringResource(R.string.house_exempt), Tone.Info)
         }
 
         if (house.unpaidMonths.isNotEmpty()) {
@@ -269,14 +277,41 @@ private fun HouseFacts(house: House) {
 
         if (house.isMetered) {
             Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (house.readingDone) {
-                    Chip(stringResource(R.string.house_reading_done, house.readingValue ?: ""), Tone.Good)
-                } else {
-                    Chip(stringResource(R.string.house_not_read), Tone.Money)
+
+            // Labelled facts rather than an unlabelled row of chips: at a door the difference between
+            // «السابق» and the reading he just took is the difference between two numbers and one.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.ElectricMeter,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+
+                Spacer(Modifier.width(6.dp))
+
+                Text(
+                    text = if (house.readingDone) {
+                        stringResource(R.string.house_reading_done, house.readingValue ?: "")
+                    } else {
+                        stringResource(R.string.house_not_read)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = toneInk(if (house.readingDone) Tone.Good else Tone.Money),
+                )
+
+                if (house.readingEstimated) {
+                    Spacer(Modifier.width(6.dp))
+                    Chip(stringResource(R.string.house_estimated))
                 }
-                if (house.readingEstimated) Chip(stringResource(R.string.house_estimated))
-                Chip(stringResource(R.string.house_previous, house.previousValue))
+
+                Spacer(Modifier.weight(1f))
+
+                Text(
+                    text = stringResource(R.string.house_previous, house.previousValue),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

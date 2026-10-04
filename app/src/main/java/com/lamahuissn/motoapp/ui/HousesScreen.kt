@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.AreaSheet
@@ -36,10 +37,11 @@ import com.lamahuissn.motoapp.data.House
 /**
  * One area's houses — the sheet the collector walks with.
  *
- * Every card is built to be read out loud at a door, in this order: the household's name, what is left
- * to pay, the months that figure is made of, and whether the meter has been read this cycle. A flat
- * house whose month has not been billed says so — «لا فاتورة لهذا الشهر بعد» is a different sentence
- * at a door from «صفر», and only one of them is true.
+ * The card is built on ONE idea, the same one the invoice card is built on: a head line that uses the
+ * whole width — the household on one side, the figure he is being asked for on the other — and then at
+ * most two more lines, each of which must carry something a collector says at a door. That is what
+ * keeps a house with months owed and a house that is clear the same height, and what stops the list
+ * looking like a pile of stacked labels.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,13 +56,12 @@ fun HousesScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            // Medium, like the areas screen: the area's name and the cycle it is being walked for.
             MediumTopAppBar(
                 title = {
                     Column {
                         Text(areaName, style = MaterialTheme.typography.titleLarge)
                         Text(
-                            text = stringResource(R.string.houses_period, (load as? Load.Ready)?.value?.period ?: ""),
+                            text = stringResource(R.string.houses_period, (load as? Load.Ready)?.value?.periodText ?: ""),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -106,11 +107,10 @@ fun HousesScreen(
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             item {
                                 SheetStrip(sheet)
-                                Spacer(Modifier.height(6.dp))
                                 SectionTitle(stringResource(R.string.houses_section))
                             }
 
@@ -168,23 +168,27 @@ private fun SheetStrip(sheet: AreaSheet) {
 
 @Composable
 private fun HouseCard(house: House, onOpen: () -> Unit) {
+    val avatarTone = when {
+        house.exempt -> Tone.Info
+        house.owes -> Tone.Money
+        else -> Tone.Good
+    }
+
     MotoCard(onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(
-                name = house.name,
-                tone = when {
-                    house.exempt -> Tone.Info
-                    house.owes -> Tone.Money
-                    else -> Tone.Good
-                },
-            )
+            Avatar(name = house.name, tone = avatarTone)
 
             Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(house.name, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = house.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
 
-                Spacer(Modifier.height(7.dp))
+                Spacer(Modifier.height(6.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Chip(
@@ -200,55 +204,34 @@ private fun HouseCard(house: House, onOpen: () -> Unit) {
                     }
                 }
             }
-        }
 
-        Spacer(Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            Fact(
-                label = stringResource(R.string.house_balance),
-                value = Money.usd(house.balance),
-                tone = if (house.owes) Tone.Money else Tone.Neutral,
-                emphasize = true,
-                modifier = Modifier.weight(1f),
-            )
-
-            if (house.credit != "0.00") {
-                Fact(
-                    label = stringResource(R.string.house_credit),
-                    value = Money.usd(house.credit),
-                    tone = Tone.Good,
-                    modifier = Modifier.weight(1f),
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = stringResource(R.string.house_balance),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = Money.usd(house.balance),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = if (house.owes) toneInk(Tone.Money) else toneInk(Tone.Neutral),
                 )
             }
         }
 
         if (house.unpaidMonths.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text = stringResource(R.string.house_months),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(12.dp))
+
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                house.unpaidMonths.take(3).forEach { month ->
-                    Chip(
-                        text = month.label + " · " + Money.usd(month.remaining),
-                        tone = Tone.Money,
-                    )
+                house.unpaidMonths.take(2).forEach { month ->
+                    Chip(text = month.label + " · " + Money.usd(month.remaining), tone = Tone.Money)
                 }
-                if (house.unpaidMonths.size > 3) {
-                    Chip(text = "+" + (house.unpaidMonths.size - 3).toString())
+                if (house.unpaidMonths.size > 2) {
+                    Chip(text = "+" + (house.unpaidMonths.size - 2).toString())
                 }
             }
-        }
-
-        if (house.flatAndNotBilled) {
-            Spacer(Modifier.height(12.dp))
+        } else if (house.flatAndNotBilled) {
+            Spacer(Modifier.height(10.dp))
             Text(
                 text = stringResource(R.string.house_not_billed),
                 style = MaterialTheme.typography.bodyMedium,
@@ -256,35 +239,50 @@ private fun HouseCard(house: House, onOpen: () -> Unit) {
             )
         }
 
+        if (house.credit != "0.00") {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.house_credit_row, Money.usd(house.credit)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = toneInk(Tone.Good),
+            )
+        }
+
         if (house.isMetered) {
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Filled.ElectricMeter,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                 )
 
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (house.readingDone) {
-                        Chip(
-                            text = stringResource(R.string.house_reading_done, house.readingValue ?: ""),
-                            tone = Tone.Good,
-                        )
+                Text(
+                    text = if (house.readingDone) {
+                        stringResource(R.string.house_reading_done, house.readingValue ?: "")
                     } else {
-                        Chip(text = stringResource(R.string.house_not_read), tone = Tone.Money)
-                    }
+                        stringResource(R.string.house_not_read)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = toneInk(if (house.readingDone) Tone.Good else Tone.Money),
+                )
 
-                    if (house.readingEstimated) {
-                        Chip(stringResource(R.string.house_estimated))
-                    }
-
-                    Chip(stringResource(R.string.house_previous, house.previousValue))
+                if (house.readingEstimated) {
+                    Spacer(Modifier.width(6.dp))
+                    Chip(stringResource(R.string.house_estimated))
                 }
+
+                Spacer(Modifier.weight(1f))
+
+                Text(
+                    text = stringResource(R.string.house_previous, house.previousValue),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

@@ -66,6 +66,7 @@
     <string name="house_action_read">إدخال قراءة</string>
     <string name="house_action_collect">قبض</string>
     <string name="house_action_nothing">لا شيء عليه الآن — القبض يحتاج رصيدًا. إن كان الشهر بلا فاتورة فالمكتب يُصدرها.</string>
+    <string name="house_credit_row">بقي له عندنا: %1$s</string>
     <string name="house_invoices">الفواتير</string>
     <string name="invoice_paid">مسدَّدة</string>
     <string name="invoice_left">المتبقي %1$s</string>
