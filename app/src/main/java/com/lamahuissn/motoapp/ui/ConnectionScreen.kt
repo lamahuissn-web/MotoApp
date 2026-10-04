@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,9 +39,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.MotoApi
@@ -133,7 +136,7 @@ private fun BrandHeader() {
         ) {
             Icon(
                 imageVector = Icons.Filled.Bolt,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.brand_mark_description),
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(32.dp),
             )
@@ -168,14 +171,17 @@ private fun ServerCard() {
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // An address is read left to right even on an Arabic screen: the isolate keeps the
+            // An address is read left to right even on a right-to-left screen: the isolate keeps the
             // hostname in one piece instead of letting the bidi algorithm scatter its dots.
-            Text(
-                text = MotoApi.baseUrl,
-                style = MaterialTheme.typography.titleMedium,
-                fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Start,
-            )
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Text(
+                    text = MotoApi.baseUrl,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

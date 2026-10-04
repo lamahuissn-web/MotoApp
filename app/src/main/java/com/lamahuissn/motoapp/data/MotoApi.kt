@@ -23,6 +23,16 @@ import java.util.concurrent.TimeUnit
  */
 object MotoApi {
 
+    /**
+     * Every request carries this.
+     *
+     * The office reads Arabic, and the server writes its refusals, its month labels and its
+     * validation sentences at the moment it answers — so the language has to be asked for on the
+     * request, not chosen on a screen. Without it the collector gets English sentences about his own
+     * Arabic household.
+     */
+    const val LANGUAGE = "ar"
+
     /** No trailing slash, so `baseUrl + "api/v1/me"` is always a well-formed URL. */
     val baseUrl: String = BuildConfig.API_BASE_URL.trimEnd('/')
 
@@ -39,6 +49,7 @@ object MotoApi {
         val request = Request.Builder()
             .url("$baseUrl/api/v1/me")
             .header("Accept", "application/json")
+            .header("Accept-Language", LANGUAGE)
             .get()
             .build()
 

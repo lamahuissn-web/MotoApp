@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    عربي دائمًا، لا بحسب لغة الهاتف.
+
+    القرار مُشاهَد لا مُفترَض: أول تشغيل على هاتف لغته إنجليزية أظهر الشاشة بالإنجليزية واتجاهها من
+    اليسار، فانكسرت الجملة العربية القادمة من الخادم (النقطة في أول السطر التالي). الجابي يقرأ ورقة
+    إلى بيتٍ عربي، فلا يجوز أن يغيّر هاتفٌ لغته إنجليزية شكل المخاطبة.
+
+    ما بقي بالإنجليزية هنا هو ما لا يُترجَم: اسم التطبيق، وعنوان الخادم، ورموز الردّ الآلية التي
+    يقرأها من يصلح العطل.
+-->
 <resources>
-    <string name="app_name">MotoApp</string>
-    <string name="app_tagline">The collector\'s and the manager\'s phone</string>
-    <string name="server_label">Server address</string>
-    <string name="probe_button">Test the connection</string>
-    <string name="probe_running">Talking to the server…</string>
-    <string name="result_answer_title">The server answered (HTTP %1$d)</string>
-    <string name="result_code_label">Code: %1$s</string>
-    <string name="result_unreachable_title">The phone did not reach the server</string>
-    <string name="result_unreachable_body">Reason: %1$s</string>
-    <string name="result_unexpected_body">The answer was not one this app knows. Report it to the office.</string>
-    <string name="next_slice">This is the first screen: it proves the phone reaches the office\'s server. The collector\'s sheet, the reading, the collection and the receipt are built on top of it.</string>
+    <string name="app_name" translatable="false">MotoApp</string>
+    <string name="app_tagline">هاتف الجابي والمدير</string>
+    <string name="brand_mark_description">شعار التطبيق</string>
+    <string name="server_label">عنوان الخادم</string>
+    <string name="probe_button">افحص الاتصال بالخادم</string>
+    <string name="probe_running">يتكلّم مع الخادم…</string>
+    <string name="result_answer_title">أجاب الخادم (HTTP %1$d)</string>
+    <string name="result_code_label">الرمز: %1$s</string>
+    <string name="result_unreachable_title">لم يصل الهاتف إلى الخادم</string>
+    <string name="result_unreachable_body">السبب: %1$s</string>
+    <string name="result_unexpected_body">الردّ ليس بالشكل الذي يعرفه التطبيق — أبلغ المكتب به.</string>
+    <string name="next_slice">هذه أول شاشة: تُثبت أن الهاتف يصل إلى خادم المكتب. ورقة الجابي، والقراءة، والقبض، والإيصال تُبنى عليها.</string>
 </resources>

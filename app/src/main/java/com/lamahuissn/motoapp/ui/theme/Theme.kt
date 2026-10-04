@@ -5,6 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 
 private val Light = lightColorScheme(
     primary = BrandBlueDark,
@@ -51,17 +54,26 @@ private val Dark = darkColorScheme(
 /**
  * The one theme the app wears.
  *
- * Dark mode is not a preference here: a collector reads the screen at a door, sometimes at night,
- * sometimes in the sun, and the office's own phones are split between the two.
+ * Two decisions are made here rather than per screen:
+ *
+ *  - **The direction is right-to-left, always.** The office reads Arabic and the collector's sheet is
+ *    a document he reads to a household at a door; the phone's own language must not turn that
+ *    document around. The first run on an English phone (2026-10-04) put an Arabic sentence inside a
+ *    left-to-right screen and broke it across two lines with the full stop in front — the words were
+ *    right and every line was facing the wrong way.
+ *  - **Dark mode is not a preference here.** A collector reads the screen at a door, sometimes at
+ *    night, sometimes in the sun, and the office's phones are split between the two.
  */
 @Composable
 fun MotoAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) Dark else Light,
-        typography = MotoTypography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) Dark else Light,
+            typography = MotoTypography,
+            content = content,
+        )
+    }
 }
