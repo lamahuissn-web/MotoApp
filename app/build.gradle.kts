@@ -1,10 +1,33 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// Imported rather than written as java.util.Properties: inside a Gradle script `java` is the Java
+// plugin's extension, so the fully qualified name resolves to the extension's members, not the JDK's.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+/**
+ * The key this office signs its own app with, read from OUTSIDE the working tree.
+ *
+ * A keystore in the repository is a keystore anybody who can clone can sign with, and this app's
+ * signature is the only thing that lets an update be installed over an existing one. The path comes
+ * from an environment variable, or from ~/.motoapp/keystore.properties — never from the project.
+ */
+val keystorePropertiesFile: File = System.getenv("MOTOAPP_KEYSTORE_PROPERTIES")
+    ?.let { file(it) }
+    ?: File(System.getProperty("user.home"), ".motoapp/keystore.properties")
+
+val keystoreProperties: Properties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { stream -> keystoreProperties.load(stream) }
+}
+
+/** Set inside the android block; the release guard below reads it. */
+var hasReleaseSigning = false
 
 android {
     namespace = "com.lamahuissn.motoapp"
@@ -27,10 +50,34 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://gen.ispnet.online/\"")
     }
 
+    if (!keystoreProperties.isEmpty) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+
+        hasReleaseSigning = true
+    }
+
     buildTypes {
-        release {
+        debug {
+            // Left unminified on purpose: a debug build is for reading stack traces, and the office
+            // keeps one installed only while something is being chased.
             isMinifyEnabled = false
+        }
+
+        release {
+            // R8 and shrunk resources are most of the difference between the app feeling slow and
+            // feeling native: a debug Compose build carries instrumentation through every frame, and
+            // the baseline profiles the Compose libraries ship are only applied to an optimized build.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -47,6 +94,16 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+// A release artifact that is unsigned — or signed with a key other than this office's — must never be
+// delivered quietly, so a release task says what is missing instead.
+tasks.matching { it.name.contains("Release") }.configureEach {
+    doFirst {
+        require(hasReleaseSigning) {
+            "لا يوجد مفتاح إصدار: ضع ملف الخصائص في $keystorePropertiesFile (storeFile/storePassword/keyAlias/keyPassword)."
         }
     }
 }
