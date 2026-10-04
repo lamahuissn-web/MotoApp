@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MotoApp</string>
+    <string name="app_tagline">هاتف الجابي والمدير</string>
+    <string name="server_label">عنوان الخادم</string>
+    <string name="probe_button">افحص الاتصال بالخادم</string>
+    <string name="probe_running">يتكلّم مع الخادم…</string>
+    <string name="result_answer_title">أجاب الخادم (HTTP %1$d)</string>
+    <string name="result_code_label">الرمز: %1$s</string>
+    <string name="result_unreachable_title">لم يصل الهاتف إلى الخادم</string>
+    <string name="result_unreachable_body">السبب: %1$s</string>
+    <string name="result_unexpected_body">الردّ ليس بالشكل الذي يعرفه التطبيق — أبلغ المكتب به.</string>
+    <string name="next_slice">هذه أول شاشة: تُثبت أن الهاتف يصل إلى خادم المكتب. ورقة الجابي، والقراءة، والقبض، والإيصال تُبنى عليها.</string>
+</resources>

@@ -1,0 +1,18 @@
+# Android / Gradle
+.gradle/
+build/
+.kotlin/
+local.properties
+*.iml
+.idea/
+captures/
+
+# Signing material never belongs in the repository: a keystore in git is a keystore anybody can sign with.
+*.keystore
+*.jks
+keystore.properties
+
+# Built artifacts are delivered, not committed.
+*.apk
+*.aab
+*.ap_

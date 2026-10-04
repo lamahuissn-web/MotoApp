@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The colour of the window before Compose draws: brand blue, so opening the app looks like the app. -->
+    <color name="splash_background">#009EF7</color>
+    <color name="ic_launcher_background">#0B1B2B</color>
+</resources>

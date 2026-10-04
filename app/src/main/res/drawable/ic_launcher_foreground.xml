@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The mark: a bolt inside the brand's rounded square. A vector rather than a set of PNGs so the
+    same file is sharp on every screen the office's phones come in, and so a colour change is one
+    edit instead of seven exports.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#009EF7"
+        android:pathData="M58.6,22L38,58.4h12.9L47.4,86L70,47.6H56.3L58.6,22z" />
+</vector>

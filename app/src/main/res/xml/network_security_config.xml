@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The office's panel is reached through the Cloudflare tunnel, so every real call is HTTPS and
+    cleartext is refused by default. The one exception is the development host on the office's own
+    network, so a phone can be pointed at a test copy without weakening the app the office uses.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.10.90.200</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        A platform theme, not a Material Components one: the app's whole surface is Compose and the
+        only job of this file is to give the window a background before the first Compose frame, with
+        no action bar and a transparent status bar behind the edge-to-edge layout.
+    -->
+    <style name="Theme.MotoApp" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+</resources>
