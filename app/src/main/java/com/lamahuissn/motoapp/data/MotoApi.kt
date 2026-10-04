@@ -362,6 +362,7 @@ object MotoApi {
             },
             house = HouseSummary(id = house.optInt("id"), balance = house.optString("balance"), credit = house.optString("credit")),
             receiptUrl = row.optString("receipt_url"),
+            receiptText = row.optString("receipt_text").takeIf { it.isNotEmpty() && it != "null" },
             replay = row.optBoolean("replay"),
         )
     }

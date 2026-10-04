@@ -1,5 +1,7 @@
 package com.lamahuissn.motoapp.ui
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -40,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -221,8 +225,32 @@ fun HouseScreen(
     }
 
     outcome?.let { result ->
-        OutcomeDialog(outcome = result, onRetry = onRetryWrite, onDismiss = onDismissOutcome)
+        val context = LocalContext.current
+
+        OutcomeDialog(
+            outcome = result,
+            onRetry = onRetryWrite,
+            onShare = { receipt -> shareReceipt(context, receipt) },
+            onDismiss = onDismissOutcome,
+        )
     }
+}
+
+/**
+ * Hand the receipt to whatever the phone uses for messages.
+ *
+ * The office writes it, the phone only carries it: WhatsApp (or whatever the household actually uses)
+ * receives the office's own words, so a receipt held in a street and one held at the counter cannot
+ * drift apart. No permission, no account, no service of ours in the middle.
+ */
+private fun shareReceipt(context: Context, receipt: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.receipt_heading))
+        putExtra(Intent.EXTRA_TEXT, receipt)
+    }
+
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_receipt)))
 }
 
 @Composable
@@ -566,12 +594,20 @@ private fun CollectionDialog(
 }
 
 @Composable
-private fun OutcomeDialog(outcome: Outcome, onRetry: () -> Unit, onDismiss: () -> Unit) {
+private fun OutcomeDialog(
+    outcome: Outcome,
+    onRetry: () -> Unit,
+    onShare: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(outcome.title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 outcome.facts.forEach { (label, value) ->
                     if (value.isBlank()) {
                         Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -595,16 +631,37 @@ private fun OutcomeDialog(outcome: Outcome, onRetry: () -> Unit, onDismiss: () -
                         code = problem.code,
                     )
                 }
+
+                // The office's own receipt, shown as the household will receive it — and selectable,
+                // so a collector without WhatsApp can still copy it by hand.
+                outcome.receipt?.let { receipt ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.receipt_heading),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    SelectionContainer {
+                        Text(
+                            text = receipt,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
-            if (outcome.retryable) {
-                Button(onClick = onRetry) { Text(stringResource(R.string.retry_send)) }
-            } else {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) }
+            when {
+                outcome.retryable -> Button(onClick = onRetry) { Text(stringResource(R.string.retry_send)) }
+
+                outcome.receipt != null -> Button(onClick = { onShare(outcome.receipt) }) {
+                    Text(stringResource(R.string.share_receipt))
+                }
+
+                else -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) }
             }
         },
-        dismissButton = if (outcome.retryable) {
+        dismissButton = if (outcome.retryable || outcome.receipt != null) {
             { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } }
         } else {
             null

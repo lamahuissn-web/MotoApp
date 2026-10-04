@@ -44,6 +44,8 @@ data class Outcome(
     val facts: List<Pair<String, String>> = emptyList(),
     val problem: Problem? = null,
     val retryable: Boolean = false,
+    /** The receipt as words, when this outcome is a collection — handed on, not retyped. */
+    val receipt: String? = null,
 )
 
 /**
@@ -493,6 +495,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         return Outcome(
             title = getApplication<Application>().getString(R.string.outcome_collection_title),
             facts = rows,
+            receipt = answer.receiptText,
         )
     }
 

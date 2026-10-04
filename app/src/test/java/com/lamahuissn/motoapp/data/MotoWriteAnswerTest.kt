@@ -30,6 +30,7 @@ class MotoWriteAnswerTest {
          "settled":[{"bill_id":3,"period":"2026-09","label":"أيلول 2026","amount":"60.00","remaining":"0.00"}],
          "house":{"id":1,"balance":"0.00","credit":"40.00"},
          "receipt_url":"/api/v1/receipts/7",
+         "receipt_text":"وصل قبض · رقم الوصل ⁦REC-2026-10-0007⁩\n\nالتاريخ: ⁦2026-10-04⁩\nالمشترك: بيت أبو علي\n\nالمبلغ المستلم: ⁦$100.00⁩\n• أيلول 2026 · ⁦$60.00⁩\n\nالرصيد المتبقي: ⁦$0.00⁩\nشكراً لثقتكم",
          "replay":false}
     """.trimIndent()
 
@@ -73,6 +74,24 @@ class MotoWriteAnswerTest {
 
         assertEquals("40.00", answer.house.credit)
         assertEquals("/api/v1/receipts/7", answer.receiptUrl)
+    }
+
+    @Test
+    fun `the receipt arrives as the office worded it, lines and all`() {
+        val receipt = MotoApi.parseCollection(collectionBody)!!.receiptText
+
+        assertNotNull(receipt)
+        // The office writes it; the phone must not re-wrap or re-word a line of it.
+        assertTrue(receipt!!.startsWith("وصل قبض"))
+        assertTrue(receipt.contains("REC-2026-10-0007"))
+        assertTrue(receipt.contains("شكراً لثقتكم"))
+        assertTrue(receipt.contains("\n"))
+    }
+
+    @Test
+    fun `an answer with no receipt text is not a receipt of empty words`() {
+        // A phone that has a receipt number but no words must say nothing rather than show a blank.
+        assertNull(MotoApi.parseCollection(liraBody)!!.receiptText)
     }
 
     @Test

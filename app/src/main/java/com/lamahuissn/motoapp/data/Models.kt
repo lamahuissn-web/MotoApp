@@ -166,5 +166,7 @@ data class CollectionAnswer(
     val settled: List<SettledMonth>,
     val house: HouseSummary,
     val receiptUrl: String,
+    /** The receipt as the office words it, ready to hand to the household's own phone. */
+    val receiptText: String? = null,
     val replay: Boolean,
 )
