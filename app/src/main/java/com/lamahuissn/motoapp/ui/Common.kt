@@ -84,6 +84,10 @@ object Money {
     fun lira(value: Long): String = "\u2066" + "LBP " + value.toString().reversed().chunked(3).joinToString(",").reversed() + "\u2069"
 
     fun liraRate(value: Double): String = "\u2066" + "1$ = " + value.toLong().toString() + " LBP" + "\u2069"
+
+    /** The office's rate as a field shows it: `90000`, not `90000.0`. */
+    fun rateText(value: Double): String =
+        if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
 }
 
 /**

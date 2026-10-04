@@ -61,6 +61,53 @@
     <string name="strip_house_read">مقروء</string>
     <string name="strip_owing">عليه دين</string>
 
+    <!-- البيت: القراءة والقبض -->
+    <string name="house_failed_title">تعذّر عرض البيت</string>
+    <string name="house_action_read">إدخال قراءة</string>
+    <string name="house_action_collect">قبض</string>
+    <string name="house_action_nothing">لا شيء عليه الآن — القبض يحتاج رصيدًا. إن كان الشهر بلا فاتورة فالمكتب يُصدرها.</string>
+    <string name="house_invoices">الفواتير</string>
+    <string name="invoice_paid">مسدَّدة</string>
+    <string name="invoice_left">المتبقي %1$s</string>
+
+    <string name="read_title">قراءة عدّاد</string>
+    <string name="read_current">القراءة الحالية</string>
+    <string name="read_kwh">كيلوواط تقديرية</string>
+    <string name="read_reason">سبب التقدير (يُقرأ لاحقًا)</string>
+    <string name="read_estimated">قراءة تقديرية (عدّاد معطّل)</string>
+
+    <string name="field_note">ملاحظة</string>
+    <string name="save">حفظ</string>
+    <string name="done">تم</string>
+    <string name="retry_send">أعِد الإرسال</string>
+
+    <string name="collect_title">قبض</string>
+    <string name="collect_balance">المتبقي عليه: %1$s</string>
+    <string name="collect_usd">دولار</string>
+    <string name="collect_lbp">ليرة</string>
+    <string name="collect_amount">المبلغ (دولار)</string>
+    <string name="collect_amount_lbp">المبلغ (ليرة)</string>
+    <string name="collect_rate">سعر الليرة</string>
+    <string name="collect_no_rate">المكتب لم يضبط سعر الليرة بعد — القبض بالليرة يحتاج سعرًا من الإعدادات.</string>
+    <string name="collect_rate_hint">سعر المكتب اليوم — عدّله فقط إن تغيّر.</string>
+    <string name="collect_confirm">تسجيل القبض</string>
+
+    <string name="outcome_reading_title">سُجّلت القراءة</string>
+    <string name="outcome_collection_title">سُجّل القبض</string>
+    <string name="outcome_refused_title">رفض الخادم الطلب</string>
+    <string name="outcome_unknown_title">لم تصل النتيجة</string>
+    <string name="outcome_refused_hint">الخادم رفض الطلب — السبب أدناه. لا شيء سُجِّل.</string>
+    <string name="outcome_unknown_hint">لم يصل الجواب — أعِد الإرسال بالمفتاح نفسه؛ لا تُنشئ محاولة جديدة.</string>
+    <string name="outcome_problem_title">سبب الرفض</string>
+    <string name="outcome_invoice">الفاتورة</string>
+    <string name="outcome_consumption">الاستهلاك</string>
+    <string name="outcome_total">الإجمالي</string>
+    <string name="outcome_remaining">المتبقي عليه</string>
+    <string name="outcome_receipt">رقم الإيصال</string>
+    <string name="outcome_collected">المقبوض</string>
+    <string name="outcome_applied">سدّد</string>
+    <string name="outcome_credited">بقي له عندنا</string>
+
     <!-- مشاكل الردّ -->
     <string name="problem_unreachable">لم يصل الهاتف إلى الخادم — تحقّق من الشبكة ثم أعِد المحاولة.</string>
     <string name="problem_unreadable">أجاب الخادم بردّ لا يعرفه التطبيق — أبلغ المكتب بالرمز المذكور.</string>

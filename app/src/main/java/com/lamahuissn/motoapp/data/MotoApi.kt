@@ -99,6 +99,113 @@ object MotoApi {
         Request.Builder().url("$baseUrl/api/v1/areas/$routeId/houses${periodQuery(period)}").authorized(token).build(),
     ) { parseSheet(it) }
 
+    /** One house in full, with the invoices the office holds against it. */
+    suspend fun house(token: String, subscriberId: Int, period: String? = null): ApiCall<House> = call(
+        Request.Builder().url("$baseUrl/api/v1/houses/$subscriberId${periodQuery(period)}").authorized(token).build(),
+    ) { body -> runCatching { JSONObject(body).getJSONObject("house") }.getOrNull()?.let { parseHouse(it) } }
+
+    /**
+     * A meter reading, taken at the door.
+     *
+     * `key` is the attempt's own key (see `AttemptKey`): it goes on the first try and on every retry of
+     * the SAME attempt, so a request lost in a dead spot cannot raise two invoices for one month.
+     */
+    suspend fun read(
+        token: String,
+        subscriberId: Int,
+        period: String,
+        currentReading: String,
+        note: String?,
+        key: String,
+    ): ApiCall<ReadingAnswer> = money(
+        endpoint = "readings",
+        token = token,
+        key = key,
+        body = JSONObject()
+            .put("subscriber_id", subscriberId)
+            .put("period", period)
+            .put("current_reading", currentReading)
+            .also { if (! note.isNullOrBlank()) it.put("note", note) }
+            .toString(),
+        parse = { parseReading(it) },
+    )
+
+    /** A reading the office accepts as an estimate, with the reason that will be read months later. */
+    suspend fun estimate(
+        token: String,
+        subscriberId: Int,
+        period: String,
+        kwh: String,
+        reason: String,
+        key: String,
+    ): ApiCall<ReadingAnswer> = money(
+        endpoint = "readings",
+        token = token,
+        key = key,
+        body = JSONObject()
+            .put("subscriber_id", subscriberId)
+            .put("period", period)
+            .put("estimated", true)
+            .put("estimated_kwh", kwh)
+            .put("reason", reason)
+            .toString(),
+        parse = { parseReading(it) },
+    )
+
+    /**
+     * Money taken at the door, in ONE currency.
+     *
+     * The office decided a household paying dollars and lira in one visit is two receipts, each in its
+     * own currency at that moment's rate — so the app never mixes them, and the rate is the office's own
+     * (`lbpRate`), never one the collector typed from memory.
+     */
+    suspend fun collect(
+        token: String,
+        subscriberId: Int,
+        amount: String,
+        currency: String,
+        rate: String?,
+        method: String,
+        note: String?,
+        collectedOn: String,
+        key: String,
+    ): ApiCall<CollectionAnswer> = money(
+        endpoint = "collections",
+        token = token,
+        key = key,
+        body = JSONObject()
+            .put("subscriber_id", subscriberId)
+            .put("amount", amount)
+            .put("currency", currency)
+            .put("method", method)
+            .put("collected_on", collectedOn)
+            .also {
+                if (! rate.isNullOrBlank()) it.put("rate", rate)
+                if (! note.isNullOrBlank()) it.put("note", note)
+            }
+            .toString(),
+        parse = { parseCollection(it) },
+    )
+
+    /** The one door every money write goes through: the endpoint, the attempt key, and the body. */
+    private suspend fun <T> money(
+        endpoint: String,
+        token: String,
+        key: String,
+        body: String,
+        parse: (String) -> T?,
+    ): ApiCall<T> = call(
+        Request.Builder()
+            .url("$baseUrl/api/v1/$endpoint")
+            .header("Accept", "application/json")
+            .header("Accept-Language", LANGUAGE)
+            .header("Authorization", "Bearer $token")
+            .header("Idempotency-Key", key)
+            .post(body.toRequestBody(jsonMedia))
+            .build(),
+        parse,
+    )
+
     /* ---------------------------------------------------------------- parsing */
 
     fun parseSession(body: String): Session? {
@@ -124,6 +231,8 @@ object MotoApi {
 
         return AreasBoard(
             period = row.optString("period"),
+            label = row.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+            lbpRate = row.optDouble("lbp_rate").takeIf { !row.isNull("lbp_rate") && !it.isNaN() },
             areas = (0 until areas.length()).map { parseArea(areas.getJSONObject(it)) },
         )
     }
@@ -145,6 +254,8 @@ object MotoApi {
 
         return AreaSheet(
             period = row.optString("period"),
+            label = row.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+            lbpRate = row.optDouble("lbp_rate").takeIf { !row.isNull("lbp_rate") && !it.isNaN() },
             areaId = area.optInt("id"),
             areaName = area.optString("name"),
             houses = (0 until houses.length()).map { parseHouse(houses.getJSONObject(it)) },
@@ -173,7 +284,87 @@ object MotoApi {
         readingValue = row.optString("reading_value").takeIf { it.isNotEmpty() && it != "null" },
         readingEstimated = row.optBoolean("reading_estimated"),
         previousValue = row.optString("previous_value"),
+        bills = row.optJSONArray("bills").toBills(),
     )
+
+    private fun JSONArray?.toBills(): List<BillLine> {
+        if (this == null) return emptyList()
+
+        return (0 until length()).map { parseBill(getJSONObject(it)) }
+    }
+
+    /** One invoice, as both the house detail and a reading's answer carry it. */
+    fun parseBill(row: JSONObject): BillLine = BillLine(
+        id = row.optInt("id"),
+        number = row.optString("number").takeIf { it.isNotEmpty() && it != "null" },
+        period = row.optString("period"),
+        label = row.optString("label"),
+        type = row.optString("type"),
+        total = row.optString("total"),
+        paid = row.optString("paid"),
+        remaining = row.optString("remaining"),
+        consumption = row.optString("consumption").takeIf { it.isNotEmpty() && it != "null" },
+        discount = row.optString("discount"),
+        subsidy = row.optString("subsidy"),
+    )
+
+    fun parseReading(body: String): ReadingAnswer? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val reading = row.optJSONObject("reading") ?: return null
+        val bill = row.optJSONObject("bill") ?: return null
+        val house = row.optJSONObject("house") ?: return null
+
+        return ReadingAnswer(
+            reading = ReadingRow(
+                id = reading.optInt("id"),
+                period = reading.optString("period"),
+                label = reading.optString("label"),
+                currentReading = reading.optString("current_reading"),
+                previousReading = reading.optString("previous_reading"),
+                consumption = reading.optString("consumption"),
+                estimated = reading.optBoolean("estimated"),
+                note = reading.optString("note").takeIf { it.isNotEmpty() && it != "null" },
+                enteredBy = if (reading.isNull("entered_by")) null else reading.optInt("entered_by"),
+            ),
+            bill = parseBill(bill),
+            house = HouseSummary(id = house.optInt("id"), balance = house.optString("balance"), credit = house.optString("credit")),
+            replay = row.optBoolean("replay"),
+        )
+    }
+
+    fun parseCollection(body: String): CollectionAnswer? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val payment = row.optJSONObject("payment") ?: return null
+        val house = row.optJSONObject("house") ?: return null
+        val settled = row.optJSONArray("settled")
+
+        return CollectionAnswer(
+            payment = PaymentRow(
+                id = payment.optInt("id"),
+                number = payment.optString("number"),
+                amount = payment.optString("amount"),
+                applied = payment.optString("applied"),
+                credited = payment.optString("credited"),
+                method = payment.optString("method"),
+                collectedOn = payment.optString("collected_on"),
+                lbpAmount = if (payment.isNull("lbp_amount")) null else payment.optLong("lbp_amount"),
+                lbpRate = if (payment.isNull("lbp_rate")) null else payment.optDouble("lbp_rate"),
+            ),
+            settled = if (settled == null) emptyList() else (0 until settled.length()).map { index ->
+                val line = settled.getJSONObject(index)
+                SettledMonth(
+                    billId = line.optInt("bill_id"),
+                    period = line.optString("period").takeIf { it.isNotEmpty() && it != "null" },
+                    label = line.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+                    amount = line.optString("amount"),
+                    remaining = line.optString("remaining"),
+                )
+            },
+            house = HouseSummary(id = house.optInt("id"), balance = house.optString("balance"), credit = house.optString("credit")),
+            receiptUrl = row.optString("receipt_url"),
+            replay = row.optBoolean("replay"),
+        )
+    }
 
     private fun JSONArray?.toMonths(): List<UnpaidMonth> {
         if (this == null) return emptyList()

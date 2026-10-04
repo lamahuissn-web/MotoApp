@@ -3,13 +3,15 @@ package com.lamahuissn.motoapp.data
 /**
  * The wire shapes, as the office's API actually sends them (copied from live responses, 2026-10-04).
  *
- * Two rules are visible in the types themselves and are not accidents:
+ * Three rules are visible in the types themselves and are not accidents:
  *
  *  - **Money is a String.** `"37.50"` arrives as text and is displayed as text. Parsing it into a
  *    Double on the phone would be the first step towards the phone deciding a balance, and the phone
  *    never decides a balance.
  *  - **A month carries its own label.** `period` is `"2026-10"` for the app to compare with, and
  *    `label` is «تشرين الأول 2026» for it to print — the app never builds an Arabic month name itself.
+ *  - **The rate belongs to the office.** `lbpRate` is null when the office has set none, and null is
+ *    not zero: a phone that converted at a rate it invented would be inventing money.
  */
 
 data class Session(val token: String, val user: MotoUser)
@@ -25,15 +27,15 @@ data class MotoUser(
     val isAdmin: Boolean get() = role == "admin"
 }
 
-/**
- * The areas board for one cycle.
- *
- * `period` is `"2026-10"` — the server sends no Arabic label here (it does on every house's unpaid
- * months, which is where a label is read aloud), so this screen shows the cycle as the machine writes
- * it and the houses carry the month names.
- */
-data class AreasBoard(val period: String, val areas: List<MotoArea>)
-
+/** The areas board for one cycle. The label is the month's name in the requester's language. */
+data class AreasBoard(
+    val period: String,
+    val label: String?,
+    val lbpRate: Double?,
+    val areas: List<MotoArea>,
+) {
+    val periodText: String get() = label ?: period
+}
 
 data class MotoArea(
     /** Null for the bucket the API adds for houses whose area was removed (`mobile.no_area`). */
@@ -49,7 +51,16 @@ data class MotoArea(
     val readingLeft: Int get() = (readingTotal - readingDone).coerceAtLeast(0)
 }
 
-data class AreaSheet(val period: String, val areaId: Int, val areaName: String, val houses: List<House>)
+data class AreaSheet(
+    val period: String,
+    val label: String?,
+    val lbpRate: Double?,
+    val areaId: Int,
+    val areaName: String,
+    val houses: List<House>,
+) {
+    val periodText: String get() = label ?: period
+}
 
 data class House(
     val id: Int,
@@ -74,6 +85,8 @@ data class House(
     val readingEstimated: Boolean,
     /** What the meter stood at last time: the figure the collector reads back at the door. */
     val previousValue: String,
+    /** Only the house detail carries the invoices; the cards in a list do not. */
+    val bills: List<BillLine> = emptyList(),
 ) {
     val isMetered: Boolean get() = type == "metered"
     val isFlat: Boolean get() = type == "flat_rate"
@@ -87,3 +100,71 @@ data class House(
 }
 
 data class UnpaidMonth(val period: String, val label: String, val remaining: String, val type: String)
+
+/** One invoice as the house detail carries it. */
+data class BillLine(
+    val id: Int,
+    val number: String?,
+    val period: String,
+    val label: String,
+    val type: String,
+    val total: String,
+    val paid: String,
+    val remaining: String,
+    val consumption: String?,
+    val discount: String,
+    val subsidy: String,
+)
+
+/** The three small facts every write answers with: what the house owes NOW. */
+data class HouseSummary(val id: Int, val balance: String, val credit: String)
+
+data class ReadingRow(
+    val id: Int,
+    val period: String,
+    val label: String,
+    val currentReading: String,
+    val previousReading: String,
+    val consumption: String,
+    val estimated: Boolean,
+    val note: String?,
+    val enteredBy: Int?,
+)
+
+/** What a reading produced: the row, the invoice it raised, and the house's new balance. */
+data class ReadingAnswer(
+    val reading: ReadingRow,
+    val bill: BillLine,
+    val house: HouseSummary,
+    val replay: Boolean,
+)
+
+data class PaymentRow(
+    val id: Int,
+    val number: String,
+    val amount: String,
+    val applied: String,
+    val credited: String,
+    val method: String,
+    val collectedOn: String,
+    val lbpAmount: Long?,
+    val lbpRate: Double?,
+)
+
+/** The months a receipt settled, with what is left on each afterwards. */
+data class SettledMonth(
+    val billId: Int,
+    val period: String?,
+    val label: String?,
+    val amount: String,
+    val remaining: String,
+)
+
+/** What a collection produced: the receipt, the months it closed, and the house's new balance. */
+data class CollectionAnswer(
+    val payment: PaymentRow,
+    val settled: List<SettledMonth>,
+    val house: HouseSummary,
+    val receiptUrl: String,
+    val replay: Boolean,
+)

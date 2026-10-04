@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lamahuissn.motoapp.ui.AreasScreen
+import com.lamahuissn.motoapp.ui.HouseScreen
 import com.lamahuissn.motoapp.ui.HousesScreen
 import com.lamahuissn.motoapp.ui.LoginScreen
 import com.lamahuissn.motoapp.ui.MotoViewModel
@@ -86,6 +87,27 @@ private fun MotoApp(model: MotoViewModel) {
                 problem = problem,
                 onBack = model::backToAreas,
                 onRetry = { model.loadSheet(current.areaId) },
+                onOpenHouse = model::openHouse,
+            )
+        }
+
+        is Screen.House -> {
+            val house by model.house.collectAsState()
+            val outcome by model.outcome.collectAsState()
+            val rate by model.lbpRate.collectAsState()
+
+            HouseScreen(
+                load = house,
+                problem = problem,
+                busy = busy,
+                outcome = outcome,
+                sheetRate = rate,
+                onBack = model::backToSheet,
+                onRetryLoad = { model.loadHouse(current.houseId) },
+                onRead = model::submitReading,
+                onCollect = model::submitCollection,
+                onRetryWrite = model::retryPending,
+                onDismissOutcome = model::clearOutcome,
             )
         }
     }

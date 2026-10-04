@@ -49,6 +49,7 @@ fun HousesScreen(
     problem: Problem?,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onOpenHouse: (House) -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -113,7 +114,9 @@ fun HousesScreen(
                                 SectionTitle(stringResource(R.string.houses_section))
                             }
 
-                            items(sheet.houses, key = { it.id }) { house -> HouseCard(house) }
+                            items(sheet.houses, key = { it.id }) { house ->
+                                HouseCard(house = house, onOpen = { onOpenHouse(house) })
+                            }
 
                             if (problem != null) {
                                 item {
@@ -164,8 +167,8 @@ private fun SheetStrip(sheet: AreaSheet) {
 }
 
 @Composable
-private fun HouseCard(house: House) {
-    MotoCard {
+private fun HouseCard(house: House, onOpen: () -> Unit) {
+    MotoCard(onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(
                 name = house.name,
