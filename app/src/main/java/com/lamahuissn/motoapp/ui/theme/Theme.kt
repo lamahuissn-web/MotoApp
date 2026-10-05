@@ -12,69 +12,72 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
+/**
+ * The panel's colour scheme, mapped onto Material's slots.
+ *
+ * Material is the mechanism; the values are the panel's. Where the panel has a token Material has no
+ * slot for (a hairline border, muted body text), the slot Material DOES have is pointed at the
+ * panel's value — `outlineVariant` is the border, `onSurfaceVariant` is the muted grey — so a screen
+ * written with Material still comes out looking like the office's own software.
+ */
 private val Light = lightColorScheme(
-    primary = Blue,
-    onPrimary = Card,
-    primaryContainer = BlueContainer,
-    onPrimaryContainer = BlueDeep,
-    secondary = Money,
-    onSecondary = Card,
-    secondaryContainer = MoneyContainer,
-    onSecondaryContainer = Money,
-    tertiary = Good,
-    onTertiary = Card,
-    tertiaryContainer = GoodContainer,
-    onTertiaryContainer = Good,
+    primary = Amber,
+    onPrimary = OnAmber,
+    primaryContainer = Muted,
+    onPrimaryContainer = Ink,
+    secondary = Ink,
+    onSecondary = Paper,
+    tertiary = Green,
+    onTertiary = Paper,
     error = Danger,
-    onError = Card,
-    errorContainer = DangerContainer,
-    onErrorContainer = Danger,
+    onError = Paper,
     background = Paper,
     onBackground = Ink,
     surface = Card,
     onSurface = Ink,
-    surfaceVariant = CardQuiet,
+    surfaceVariant = Muted,
     onSurfaceVariant = InkMuted,
-    surfaceContainerHighest = CardQuiet,
+    surfaceContainerHighest = Muted,
     outline = Line,
     outlineVariant = Line,
 )
 
 private val Dark = darkColorScheme(
-    primary = NightBlue,
-    onPrimary = NightPaper,
-    primaryContainer = NightBlueContainer,
-    onPrimaryContainer = NightBlueDeep,
-    secondary = NightMoney,
+    primary = NightAmber,
+    onPrimary = OnAmber,
+    primaryContainer = NightCard,
+    onPrimaryContainer = NightInk,
+    secondary = NightInk,
     onSecondary = NightPaper,
-    secondaryContainer = NightMoneyContainer,
-    onSecondaryContainer = NightMoney,
-    tertiary = NightGood,
+    tertiary = NightGreen,
     onTertiary = NightPaper,
-    tertiaryContainer = NightGoodContainer,
-    onTertiaryContainer = NightGood,
     error = NightDanger,
     onError = NightPaper,
-    errorContainer = NightDangerContainer,
-    onErrorContainer = NightDanger,
     background = NightPaper,
     onBackground = NightInk,
     surface = NightCard,
     onSurface = NightInk,
-    surfaceVariant = NightCardQuiet,
+    surfaceVariant = NightCard,
     onSurfaceVariant = NightMuted,
-    surfaceContainerHighest = NightCardQuiet,
+    surfaceContainerHighest = NightCard,
     outline = NightLine,
     outlineVariant = NightLine,
 )
 
-/** Soft, generous corners: a card on a phone held in one hand should not look like a spreadsheet. */
+/**
+ * The panel's radius scale, unchanged: `--radius` is 0.5rem, so `--radius-lg` (a card, a button) is
+ * 8dp, `--radius-md` 6dp, `--radius-sm` 4dp and `--radius-xl` 12dp.
+ *
+ * This replaced a much rounder scale (16–26dp). Rounded corners are the one place where "looks
+ * friendly" and "looks like the office's software" pull in opposite directions, and the owner asked
+ * for the second.
+ */
 private val MotoShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(26.dp),
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(6.dp),
+    medium = RoundedCornerShape(8.dp),
+    large = RoundedCornerShape(8.dp),
+    extraLarge = RoundedCornerShape(12.dp),
 )
 
 /**
@@ -84,11 +87,10 @@ private val MotoShapes = Shapes(
  *
  *  - **The direction is right-to-left, always.** The office reads Arabic and the collector's sheet is a
  *    document he reads to a household at a door; the phone's own language must not turn that document
- *    around. The first run on an English phone (2026-10-04) put an Arabic sentence inside a
- *    left-to-right screen and broke it across two lines with the full stop in front.
+ *    around.
  *  - **Dark mode is not a preference here.** A collector reads the screen at a door, sometimes at
- *    night, sometimes in the sun, and the office's phones are split between the two — so both schemes
- *    are designed, not just inverted.
+ *    night, sometimes in the sun, so both schemes are designed rather than inverted — and the dark
+ *    values are the panel's dark tokens, lifted exactly where the panel lifts them.
  */
 @Composable
 fun MotoAppTheme(

@@ -33,6 +33,9 @@ sealed interface Screen {
 /** Something to tell the collector, in the office's words, with the code for whoever repairs it. */
 data class Problem(val message: String, val code: String?)
 
+/** Which of the two writes an outcome came from — the screen shows each one where the web does. */
+enum class OutcomeKind { Reading, Collection, Refused, Unknown }
+
 /**
  * What happened to the last reading or collection.
  *
@@ -40,6 +43,7 @@ data class Problem(val message: String, val code: String?)
  * the SAME key, and the collector must be offered exactly that, not a fresh attempt.
  */
 data class Outcome(
+    val kind: OutcomeKind,
     val title: String,
     val facts: List<Pair<String, String>> = emptyList(),
     val problem: Problem? = null,
@@ -344,6 +348,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                     // The server answered: this attempt is over, key and all.
                     pending = null
                     _outcome.value = Outcome(
+                        kind = OutcomeKind.Refused,
                         title = app.getString(R.string.outcome_refused_title),
                         facts = listOf(app.getString(R.string.outcome_refused_hint) to ""),
                         problem = problem(call),
@@ -353,6 +358,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 else -> {
                     // Unknown: the key stays, and the collector is offered the SAME attempt again.
                     _outcome.value = Outcome(
+                        kind = OutcomeKind.Unknown,
                         title = app.getString(R.string.outcome_unknown_title),
                         facts = listOf(app.getString(R.string.outcome_unknown_hint) to ""),
                         problem = problem(call),
@@ -408,6 +414,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 is ApiCall.Refused -> {
                     pending = null
                     _outcome.value = Outcome(
+                        kind = OutcomeKind.Refused,
                         title = app.getString(R.string.outcome_refused_title),
                         facts = listOf(app.getString(R.string.outcome_refused_hint) to ""),
                         problem = problem(call),
@@ -415,6 +422,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 else -> _outcome.value = Outcome(
+                    kind = OutcomeKind.Unknown,
                     title = app.getString(R.string.outcome_unknown_title),
                     facts = listOf(app.getString(R.string.outcome_unknown_hint) to ""),
                     problem = problem(call),
@@ -464,6 +472,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun readingOutcome(answer: ReadingAnswer): Outcome = Outcome(
+        kind = OutcomeKind.Reading,
         title = getApplication<Application>().getString(R.string.outcome_reading_title),
         facts = listOf(
             getApplication<Application>().getString(R.string.outcome_invoice) to (answer.bill.number ?: answer.bill.period),
@@ -493,6 +502,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         rows += getApplication<Application>().getString(R.string.outcome_remaining) to Money.usd(answer.house.balance)
 
         return Outcome(
+            kind = OutcomeKind.Collection,
             title = getApplication<Application>().getString(R.string.outcome_collection_title),
             facts = rows,
             receipt = answer.receiptText,

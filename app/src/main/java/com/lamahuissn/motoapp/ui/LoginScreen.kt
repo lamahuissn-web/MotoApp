@@ -74,7 +74,7 @@ fun LoginScreen(
             Box(
                 modifier = Modifier
                     .size(60.dp)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(20.dp)),
+                    .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

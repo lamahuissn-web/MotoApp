@@ -3,54 +3,78 @@ package com.lamahuissn.motoapp.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * The office's own palette.
+ * The office's own palette — read out of the collector panel's stylesheet, not invented here.
  *
- * The panel the office already reads is what this has to look like on a phone: a light, quiet
- * background, white cards, one blue for anything interactive, and one accent that is reserved for
- * money — amber when something is owed, green when something is done. Amber never decorates: if it is
- * on the screen, it is asking for something.
+ * The panel is Metronic 9.5 (Tailwind 4) with KTUI components, and its brand colour is re-pointed from
+ * Metronic's default blue to **amber**: *"the operator's colour is amber — the ⚡ mark on the sign-in
+ * screen and the product's whole mental model (a generator running at night)"*. The first MotoApp
+ * screens wore the default blue, which is exactly why the owner kept saying the app did not look like
+ * the web. These are the panel's own tokens, copied value for value:
+ *
+ *  - neutrals are **zinc**; white page, white card, a hairline border, and a muted grey for the small
+ *    labels — a card in the panel is told apart by its border, not by a shadow;
+ *  - the brand is **amber-500**, and text ON amber is **zinc-950**, because amber is a light hue and
+ *    white-on-amber fails contrast;
+ *  - money owed is the **destructive** red, money clear is **green-600**, exactly as the panel paints
+ *    a balance;
+ *  - tiles (the small tinted squares) are a 12% tint of a hue carrying a deeper shade of the same hue.
  */
 
-// Light — the panel's own daytime look.
-val Blue = Color(0xFF0B6BCB)
-val BlueDeep = Color(0xFF084F97)
-val BlueContainer = Color(0xFFDCEAFB)
-val BlueSoft = Color(0xFFEAF3FD)
+// ── Light: the panel's daytime look ───────────────────────────────────────────────────────────────
 
-val Money = Color(0xFFB45309)
-val MoneyContainer = Color(0xFFFCEFD8)
+/** --foreground / text-mono. */
+val Ink = Color(0xFF09090B)
 
-val Good = Color(0xFF157347)
-val GoodContainer = Color(0xFFDBF2E5)
+/** --muted-foreground: micro-labels, meta lines, hints. */
+val InkMuted = Color(0xFF71717A)
 
-val Danger = Color(0xFFB42318)
-val DangerContainer = Color(0xFFFBE3E0)
+/** --secondary-foreground: body text inside a card, a step softer than a heading. */
+val BodyInk = Color(0xFF18181B)
 
-val Ink = Color(0xFF0F172A)
-val InkMuted = Color(0xFF55637A)
-val Paper = Color(0xFFF1F4F9)
+/** --background. */
+val Paper = Color(0xFFFFFFFF)
+
+/** --card. */
 val Card = Color(0xFFFFFFFF)
-val CardQuiet = Color(0xFFF6F8FC)
-val Line = Color(0xFFD8E1EC)
 
-// Dark — the same system at night, not a different one: the blues and ambers are lifted so they stay
-// legible on a dark card, and the surfaces keep their layers so a card is still a card.
-val NightBlue = Color(0xFF6CB6FF)
-val NightBlueContainer = Color(0xFF12365C)
-val NightBlueDeep = Color(0xFFCFE4FF)
+/** --muted: the quiet fill behind a segmented control, a preview block, a receipt's inner panel. */
+val Muted = Color(0xFFF4F4F5)
 
-val NightMoney = Color(0xFFFFC46B)
-val NightMoneyContainer = Color(0xFF4A3413)
+/** --border: the hairline that does the work a shadow would in another design. */
+val Line = Color(0xFFE9E9EC)
 
-val NightGood = Color(0xFF7BE0A6)
-val NightGoodContainer = Color(0xFF123D29)
+/** --primary (amber-500) and --primary-foreground (zinc-950). */
+val Amber = Color(0xFFF59E0B)
+val OnAmber = Color(0xFF09090B)
 
-val NightDanger = Color(0xFFFF9A8F)
-val NightDangerContainer = Color(0xFF4E1F1B)
+/** amber-700: a glyph or a figure in brand colour on a light surface. */
+val AmberInk = Color(0xFFB45309)
 
-val NightInk = Color(0xFFECF0F5)
-val NightMuted = Color(0xFF9DA8B7)
-val NightPaper = Color(0xFF0F1115)
-val NightCard = Color(0xFF181B22)
-val NightCardQuiet = Color(0xFF21262F)
-val NightLine = Color(0xFF2E3743)
+/** --destructive (red-600) and red-700 for a glyph tint. */
+val Danger = Color(0xFFDC2626)
+val DangerInk = Color(0xFFB91C1C)
+
+/** green-600 / green-700: a balance that is clear, an amount that arrived. */
+val Green = Color(0xFF16A34A)
+val GreenInk = Color(0xFF15803D)
+
+/** The other tile hues the panel uses: info (blue-700), violet (violet-700), warning (amber on yellow). */
+val BlueInk = Color(0xFF1D4ED8)
+val VioletInk = Color(0xFF6D28D9)
+val Yellow = Color(0xFFFACC15)
+
+// ── Dark: the same system at night, not a differently-coloured one ────────────────────────────────
+
+val NightPaper = Color(0xFF09090B)
+val NightCard = Color(0xFF18181B)
+val NightInk = Color(0xFFFAFAFA)
+val NightMuted = Color(0xFFA1A1AA)
+val NightBodyInk = Color(0xFFE4E4E7)
+val NightLine = Color(0xFF27272A)
+
+val NightAmber = Color(0xFFFBBF24)
+val NightGreen = Color(0xFF22C55E)
+val NightDanger = Color(0xFFEF4444)
+val NightBlueInk = Color(0xFF60A5FA)
+val NightVioletInk = Color(0xFFA78BFA)
+val NightAmberInk = Color(0xFFFBBF24)

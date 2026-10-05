@@ -3,6 +3,7 @@ package com.lamahuissn.motoapp.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,26 +16,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.WifiOff
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lamahuissn.motoapp.ui.theme.AmberInk
+import com.lamahuissn.motoapp.ui.theme.BlueInk
+import com.lamahuissn.motoapp.ui.theme.DangerInk
+import com.lamahuissn.motoapp.ui.theme.GreenInk
+import com.lamahuissn.motoapp.ui.theme.NightAmberInk
+import com.lamahuissn.motoapp.ui.theme.NightBlueInk
+import com.lamahuissn.motoapp.ui.theme.NightDanger
+import com.lamahuissn.motoapp.ui.theme.NightGreen
+import com.lamahuissn.motoapp.ui.theme.NightVioletInk
+import com.lamahuissn.motoapp.ui.theme.VioletInk
+import com.lamahuissn.motoapp.ui.theme.Yellow
 
 /** What a screen is showing: nothing yet, work in progress, the thing, or the sentence that failed. */
 sealed interface Load<out T> {
@@ -45,31 +56,62 @@ sealed interface Load<out T> {
 }
 
 /**
- * The colours a piece of information wears.
+ * The panel's tinted variants, plus the two its own stylesheet adds.
  *
- * Four tones, one meaning each: neutral is a fact, info is the system speaking, money is something
- * owed, good is something finished. The same colour never means two things on two screens — a
- * collector learns it once at a door.
+ * `Primary` is the brand (amber), `Success` a thing done, `Danger` money owed, `Warning` something
+ * waiting on a person, `Info` a fact about a household, `Violet` a flat connection, `Neutral` a
+ * quantity that is neither good nor bad. The same tint never means two things on two screens.
  */
-enum class Tone { Neutral, Info, Money, Good, Danger }
+enum class Tone { Neutral, Primary, Info, Success, Danger, Warning, Violet }
 
+/** True when the app is wearing its dark tokens. */
 @Composable
-fun toneColours(tone: Tone): Pair<Color, Color> = when (tone) {
-    Tone.Neutral -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-    Tone.Info -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-    Tone.Money -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-    Tone.Good -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-    Tone.Danger -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+private fun isNight(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+private fun Color.luminance(): Float = 0.299f * red + 0.587f * green + 0.114f * blue
+
+/**
+ * The panel's tile rule: a 12% tint of a hue carries a deeper shade of the same hue.
+ *
+ * `color-mix(in oklab, var(--primary) 12%, transparent)` in the panel's stylesheet, done with alpha
+ * here because the tint sits on a card rather than on the page.
+ */
+@Composable
+fun toneColours(tone: Tone): Pair<Color, Color> {
+    val night = isNight()
+    val scheme = MaterialTheme.colorScheme
+
+    val ink = when (tone) {
+        Tone.Neutral -> scheme.onSurfaceVariant
+        Tone.Primary -> if (night) NightAmberInk else AmberInk
+        Tone.Info -> if (night) NightBlueInk else BlueInk
+        Tone.Success -> if (night) NightGreen else GreenInk
+        Tone.Danger -> if (night) NightDanger else DangerInk
+        Tone.Warning -> if (night) NightAmberInk else AmberInk
+        Tone.Violet -> if (night) NightVioletInk else VioletInk
+    }
+
+    return when (tone) {
+        Tone.Neutral -> scheme.surfaceVariant to ink
+        Tone.Warning -> Yellow.copy(alpha = 0.20f) to ink
+        else -> ink.copy(alpha = 0.12f) to ink
+    }
 }
 
-/** The figure colour for money that is owed or clear — used for the number itself, not its chip. */
+/** The figure colour for money owed or clear — for the number itself, never for a tint. */
 @Composable
-fun toneInk(tone: Tone): Color = when (tone) {
-    Tone.Money -> MaterialTheme.colorScheme.secondary
-    Tone.Good -> MaterialTheme.colorScheme.tertiary
-    Tone.Danger -> MaterialTheme.colorScheme.error
-    Tone.Info -> MaterialTheme.colorScheme.primary
-    Tone.Neutral -> MaterialTheme.colorScheme.onSurface
+fun toneInk(tone: Tone): Color {
+    val night = isNight()
+
+    return when (tone) {
+        Tone.Neutral -> MaterialTheme.colorScheme.onSurface
+        Tone.Primary -> if (night) NightAmberInk else AmberInk
+        Tone.Info -> if (night) NightBlueInk else BlueInk
+        Tone.Success -> if (night) NightGreen else GreenInk
+        Tone.Danger -> MaterialTheme.colorScheme.error
+        Tone.Warning -> if (night) NightAmberInk else AmberInk
+        Tone.Violet -> if (night) NightVioletInk else VioletInk
+    }
 }
 
 /**
@@ -82,7 +124,8 @@ fun toneInk(tone: Tone): Color = when (tone) {
 object Money {
     fun usd(value: String): String = "\u2066$$value\u2069"
 
-    fun lira(value: Long): String = "\u2066" + "LBP " + value.toString().reversed().chunked(3).joinToString(",").reversed() + "\u2069"
+    fun lira(value: Long): String =
+        "\u2066" + "LBP " + value.toString().reversed().chunked(3).joinToString(",").reversed() + "\u2069"
 
     fun liraRate(value: Double): String = "\u2066" + "1$ = " + value.toLong().toString() + " LBP" + "\u2069"
 
@@ -92,159 +135,359 @@ object Money {
 }
 
 /**
- * The card every screen is built from: the app's own surface, a hairline edge instead of a shadow (a
- * shadow on a phone in the sun is invisible anyway), and generous padding.
+ * The card every screen is built from — the panel's own: a surface, an 8dp radius, and a hairline
+ * border instead of a shadow (on a phone in the sun a shadow is invisible and a hairline is not).
  */
 @Composable
 fun MotoCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    padding: Dp = 16.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = MaterialTheme.shapes.large
-    val colours = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-
-    if (onClick == null) {
-        Card(
-            modifier = modifier.fillMaxWidth(),
-            shape = shape,
-            colors = colours,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = border,
-        ) {
-            Column(modifier = Modifier.padding(16.dp), content = content)
-        }
-    } else {
-        Card(
-            onClick = onClick,
-            modifier = modifier.fillMaxWidth(),
-            shape = shape,
-            colors = colours,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = border,
-        ) {
-            Column(modifier = Modifier.padding(16.dp), content = content)
-        }
-    }
-}
-
-/** A small rounded label: a state, a month, a count. */
-@Composable
-fun Chip(
-    text: String,
-    tone: Tone = Tone.Neutral,
-    icon: ImageVector? = null,
-    modifier: Modifier = Modifier,
-) {
-    val (container, content) = toneColours(tone)
-
-    Row(
+    Surface(
         modifier = modifier
-            .background(container, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(5.dp))
-        }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(modifier = Modifier.padding(padding), content = content)
     }
 }
 
-/** A heading over a group of cards — the panel has these, and a list without one looks like a dump. */
+/** A tinted square holding one glyph — the panel's `.tile`, at the size the panel uses. */
 @Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 2.dp),
-    )
-}
-
-/** A rounded square holding an icon: the leading mark of every card. */
-@Composable
-fun LeadingMark(icon: ImageVector, tone: Tone = Tone.Info, modifier: Modifier = Modifier) {
-    val (container, content) = toneColours(tone)
+fun Tile(
+    tone: Tone = Tone.Neutral,
+    size: Dp = 40.dp,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val (container, ink) = toneColours(tone)
 
     Box(
         modifier = modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .size(size)
+            .clip(MaterialTheme.shapes.medium)
             .background(container),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(22.dp))
+        CompositionLocalProvider(LocalContentColor provides ink) { content() }
+    }
+}
+
+/** The first letters of a household's name, on the brand tile the panel gives it. */
+@Composable
+fun Avatar(name: String, tone: Tone = Tone.Primary, size: Dp = 40.dp) {
+    Tile(tone = tone, size = size) {
+        Text(
+            text = initials(name),
+            style = TextStyle(fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.SemiBold),
+            color = LocalContentColor.current,
+        )
     }
 }
 
 /**
- * The first letters of a household's name, so a card is recognisable at a glance in a list.
+ * Initials, with «بيت» and the definite article dropped.
  *
- * «بيت» and «منزل» are dropped before the initials are taken: every house in an area is called «بيت
- * فلان», so including it made every circle read «بف» — eleven identical avatars is not a mark, it is
- * noise.
+ * Every household in an area is called «بيت فلان», so keeping the whole name made every circle read the
+ * same two letters — a mark that marks nothing. «ال» is dropped for the same reason: «النور» and
+ * «الشارع» would both begin with «ا».
  */
-@Composable
-fun Avatar(name: String, tone: Tone = Tone.Info, modifier: Modifier = Modifier) {
-    val (container, content) = toneColours(tone)
-
-    Box(
-        modifier = modifier
-            .size(42.dp)
-            .clip(CircleShape)
-            .background(container),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = initials(name),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = content,
-        )
-    }
-}
-
 fun initials(name: String): String {
     val words = name.trim()
         .split(" ")
         .filter { it.isNotBlank() && it !in setOf("بيت", "منزل", "شقة", "محل") }
 
-    // «ال» is dropped too: «النور» and «الشارع» both starting with «ا» would make two different shops
-    // wear the same circle. The definite article is grammar, not a name.
     return words.take(2)
         .map { word -> word.removePrefix("ال").take(1).ifEmpty { word.take(1) } }
         .joinToString("")
         .ifEmpty { name.trim().removePrefix("ال").take(1) }
 }
 
-/** One tile of a summary strip: a label and a figure, quieter than a card but not a heading. */
-@Composable
-fun SummaryTile(label: String, value: String, tone: Tone = Tone.Neutral, modifier: Modifier = Modifier) {
-    val (container, content) = toneColours(tone)
+enum class BadgeSize { Small, Medium, Large }
 
-    Column(
+/** The panel's badge: a tinted pill with the hue's deeper shade for its text. */
+@Composable
+fun Badge(
+    text: String,
+    tone: Tone = Tone.Neutral,
+    size: BadgeSize = BadgeSize.Small,
+    modifier: Modifier = Modifier,
+) {
+    val (container, ink) = toneColours(tone)
+
+    val vertical = when (size) {
+        BadgeSize.Small -> 2.dp
+        BadgeSize.Medium -> 4.dp
+        BadgeSize.Large -> 6.dp
+    }
+    val horizontal = when (size) {
+        BadgeSize.Small -> 8.dp
+        BadgeSize.Medium -> 10.dp
+        BadgeSize.Large -> 12.dp
+    }
+    val style = when (size) {
+        BadgeSize.Small -> MaterialTheme.typography.labelSmall
+        BadgeSize.Medium -> MaterialTheme.typography.labelMedium
+        BadgeSize.Large -> MaterialTheme.typography.labelLarge
+    }
+
+    Box(
         modifier = modifier
-            .background(container, MaterialTheme.shapes.medium)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .background(container, MaterialTheme.shapes.small)
+            .padding(horizontal = horizontal, vertical = vertical),
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = content, maxLines = 1)
-        Spacer(Modifier.height(2.dp))
+        Text(text = text, style = style, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * The panel's micro-label: `text-2xs font-semibold uppercase tracking-widest text-muted-foreground`.
+ *
+ * Arabic has no case, so the weight and the letter-spacing carry it alone — which is why the tracking
+ * survives here and the uppercase does not.
+ */
+@Composable
+fun MicroLabel(text: String, modifier: Modifier = Modifier, tone: Tone = Tone.Neutral) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+        color = if (tone == Tone.Neutral) MaterialTheme.colorScheme.onSurfaceVariant else toneInk(tone),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+}
+
+/**
+ * A figure.
+ *
+ * `tabular-nums` (the panel's `.amount-cell`) so a column of amounts lines up digit for digit and a
+ * collector scanning a street does not re-read a number that moved a pixel.
+ */
+@Composable
+fun Amount(
+    value: String,
+    tone: Tone = Tone.Neutral,
+    style: TextStyle = MaterialTheme.typography.titleMedium,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = value,
+        style = style.copy(fontFeatureSettings = "tnum", letterSpacing = (-0.01).sp),
+        fontWeight = FontWeight.SemiBold,
+        color = toneInk(tone),
+        maxLines = 1,
+        modifier = modifier,
+    )
+}
+
+/** A `justify-between` row: what it is on one side, what it is worth on the other. */
+@Composable
+fun LineRow(
+    label: String,
+    value: String? = null,
+    valueTone: Tone = Tone.Neutral,
+    valueStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+    muted: Boolean = true,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            color = content,
-            maxLines = 1,
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (muted) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            modifier = Modifier.weight(1f),
         )
+
+        if (value != null) {
+            Text(
+                text = value,
+                style = valueStyle.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.SemiBold,
+                color = toneInk(valueTone),
+                textAlign = TextAlign.End,
+            )
+        }
+    }
+}
+
+/** A section heading with an optional count on the far side — the panel's `flex items-baseline`. */
+@Composable
+fun SectionHeading(text: String, trailing: String? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 2.dp, end = 2.dp, top = 6.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (trailing != null) {
+            Text(
+                text = trailing,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** One choice in a [Segmented] control, with an optional state dot. */
+data class Segment(val label: String, val dotTone: Tone? = null)
+
+/**
+ * The panel's view switcher: a muted track holding solid-on-active segments.
+ *
+ * The active segment is the only filled one, so which panel is on screen is never ambiguous — the same
+ * control the collector already uses on the web screen for this household.
+ */
+@Composable
+fun Segmented(
+    segments: List<Segment>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        segments.forEachIndexed { index, segment ->
+            val active = index == selected
+            val container = if (active) MaterialTheme.colorScheme.primary else Color.Transparent
+            val ink = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(container)
+                    .clickable { onSelect(index) }
+                    .padding(vertical = 9.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = segment.label, style = MaterialTheme.typography.labelLarge, color = ink, maxLines = 1)
+
+                if (segment.dotTone != null) {
+                    Spacer(Modifier.width(5.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(toneInk(segment.dotTone)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A `kt-btn` at the panel's large size: a 48dp bar, 8dp radius, dark text on the brand. */
+@Composable
+fun PrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .then(if (enabled && !busy) Modifier.clickable { onClick() } else Modifier),
+        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** A `kt-btn-outline`: a hairline border on the card surface. */
+@Composable
+fun OutlineButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tone: Tone = Tone.Neutral,
+    height: Dp = 44.dp,
+) {
+    val ink = if (tone == Tone.Neutral) MaterialTheme.colorScheme.onSurface else toneInk(tone)
+
+    Surface(
+        modifier = modifier
+            .height(height)
+            .then(if (enabled) Modifier.clickable { onClick() } else Modifier),
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (enabled) ink else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** The panel's `kt-alert kt-alert-light`: a tinted block carrying one sentence. */
+@Composable
+fun Alert(text: String, tone: Tone = Tone.Warning, modifier: Modifier = Modifier) {
+    val (container, ink) = toneColours(tone)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(container, MaterialTheme.shapes.medium)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyMedium, color = ink)
     }
 }
 
@@ -264,51 +507,30 @@ fun ProblemCard(
     retryLabel: String = "أعِد المحاولة",
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.WifiOff,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
+    MotoCard(modifier = modifier) {
+        Text(text = title, style = MaterialTheme.typography.titleSmall, color = toneInk(Tone.Danger))
 
-            if (message != null) {
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
+        if (message != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
 
-            if (code != null) {
-                Text(
-                    text = code,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
+        if (code != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = code,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
-            if (onRetry != null) {
-                TextButton(onClick = onRetry) {
-                    Text(retryLabel, color = MaterialTheme.colorScheme.onErrorContainer)
-                }
-            }
+        if (onRetry != null) {
+            Spacer(Modifier.height(6.dp))
+            OutlineButton(text = retryLabel, onClick = onRetry, height = 40.dp)
         }
     }
 }
@@ -316,6 +538,6 @@ fun ProblemCard(
 @Composable
 fun BusyBox(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }

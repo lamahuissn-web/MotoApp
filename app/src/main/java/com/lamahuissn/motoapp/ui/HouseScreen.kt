@@ -2,9 +2,12 @@ package com.lamahuissn.motoapp.ui
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,57 +17,63 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ElectricMeter
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.House
+import com.lamahuissn.motoapp.ui.theme.Green
 
-/** What the collector opened a dialog for. */
-private sealed interface Sheet {
-    data object Reading : Sheet
-    data object Collection : Sheet
-}
+/** What the collector is looking at inside one household. */
+private const val VIEW_OVERVIEW = 0
+private const val VIEW_READING = 1
+private const val VIEW_PAYMENT = 2
 
 /**
- * One house, and the two things a collector does at its door.
+ * One household — the panel's own subscriber screen, on a phone.
  *
- * Everything here is the server's number: the balance, the months it is made of, the meter's last
- * value and the invoices. The phone fills in a reading or an amount and sends it — and when the answer
- * is unknown (a dead spot, a timeout) it offers the SAME attempt again rather than a new one, because a
- * new attempt is a second invoice or a second receipt for one act at one door.
+ * The structure is the web screen the collector already knows, element for element: an identity card,
+ * the balance in the panel's red or green with its big state badge, then the three-way switcher
+ * (نظرة عامة / قراءة / قبض) and the panel behind the chosen view. The reading and the collection happen
+ * INSIDE the screen here rather than in dialogs, because that is what the web does and because a
+ * collector at a door should not lose sight of the balance while he types.
+ *
+ * Everything shown is the server's number. The phone fills in a reading or an amount and sends it, and
+ * when the answer is unknown it offers the SAME attempt again rather than a new one — a new attempt is a
+ * second invoice or a second receipt for one act at one door.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HouseScreen(
     load: Load<House>,
@@ -79,57 +88,87 @@ fun HouseScreen(
     onRetryWrite: () -> Unit,
     onDismissOutcome: () -> Unit,
 ) {
-    var sheet by remember { mutableStateOf<Sheet?>(null) }
     val house = (load as? Load.Ready)?.value
+    val context = LocalContext.current
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            MediumTopAppBar(
-                title = {
-                    Column {
-                        Text(house?.name ?: stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            text = house?.areaName.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-        },
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (load) {
-                Load.Idle, Load.Busy -> BusyBox()
+    // The view follows what just happened: a receipt belongs on the payment panel, a recorded reading
+    // on the reading panel — the same place the web app leaves the collector standing.
+    var view by rememberSaveable {
+        mutableStateOf(
+            when (outcome?.kind) {
+                OutcomeKind.Collection -> VIEW_PAYMENT
+                OutcomeKind.Reading -> VIEW_READING
+                else -> VIEW_OVERVIEW
+            },
+        )
+    }
 
-                is Load.Failed -> Column(Modifier.padding(20.dp)) {
-                    ProblemCard(
-                        title = stringResource(R.string.house_failed_title),
-                        message = problem?.message ?: load.message,
-                        code = problem?.code,
-                        onRetry = onRetryLoad,
-                    )
-                }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.back),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
 
-                is Load.Ready -> Column(
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = house?.name ?: stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                MicroLabel(house?.areaName.orEmpty())
+            }
+        }
+
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+        when (load) {
+            Load.Idle, Load.Busy -> BusyBox()
+
+            is Load.Failed -> Column(Modifier.padding(16.dp)) {
+                ProblemCard(
+                    title = stringResource(R.string.house_failed_title),
+                    message = problem?.message ?: load.message,
+                    code = problem?.code,
+                    onRetry = onRetryLoad,
+                )
+            }
+
+            is Load.Ready -> {
+                val entry = load.value
+
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    HouseFacts(load.value)
+                    IdentityCard(entry)
+                    BalanceCard(entry)
 
                     // A refresh that failed while he is looking at figures he already had: say so
                     // rather than let him read a balance that may be a minute old as if it were now.
@@ -142,97 +181,105 @@ fun HouseScreen(
                         )
                     }
 
-                    // One row, two halves: the two things a collector does at a door, side by side, so
-                    // the screen does not read as a stack of full-width bars.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        if (load.value.isMetered) {
-                            Button(
-                                onClick = { sheet = Sheet.Reading },
-                                enabled = !busy,
-                                shape = MaterialTheme.shapes.medium,
-                                contentPadding = PaddingValues(horizontal = 12.dp),
-                                modifier = Modifier.weight(1f).height(52.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.house_action_read),
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            }
-                        }
-
-                        if (load.value.owes) {
-                            Button(
-                                onClick = { sheet = Sheet.Collection },
-                                enabled = !busy,
-                                shape = MaterialTheme.shapes.medium,
-                                contentPadding = PaddingValues(horizontal = 12.dp),
-                                modifier = Modifier.weight(1f).height(52.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.house_action_collect),
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            }
+                    if (outcome != null && outcome.kind == OutcomeKind.Unknown) {
+                        Alert(
+                            text = outcome.problem?.message
+                                ?: stringResource(R.string.outcome_unknown_hint),
+                            tone = Tone.Warning,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlineButton(
+                                text = stringResource(R.string.retry_send),
+                                onClick = onRetryWrite,
+                                tone = Tone.Warning,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlineButton(
+                                text = stringResource(R.string.done),
+                                onClick = onDismissOutcome,
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
 
-                    if (!load.value.owes) {
-                        Text(
-                            text = stringResource(R.string.house_action_nothing),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (outcome != null && outcome.kind == OutcomeKind.Refused) {
+                        Alert(
+                            text = outcome.problem?.message ?: stringResource(R.string.outcome_refused_hint),
+                            tone = Tone.Danger,
+                        )
+                        OutlineButton(
+                            text = stringResource(R.string.done),
+                            onClick = onDismissOutcome,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
 
-                    Invoices(load.value)
+                    if (outcome != null && outcome.kind == OutcomeKind.Reading) {
+                        Alert(
+                            text = stringResource(R.string.reading_saved_alert),
+                            tone = Tone.Success,
+                        )
+                    }
 
-                    Spacer(Modifier.height(16.dp))
+                    if (outcome != null && outcome.kind == OutcomeKind.Collection && outcome.receipt != null) {
+                        ReceiptCard(
+                            outcome = outcome,
+                            onShare = { receipt -> shareReceipt(context, receipt) },
+                            onDone = onDismissOutcome,
+                        )
+                    } else {
+                        Segmented(
+                            segments = listOf(
+                                Segment(stringResource(R.string.view_overview)),
+                                Segment(
+                                    label = stringResource(R.string.view_reading),
+                                    dotTone = if (!entry.isMetered) {
+                                        null
+                                    } else if (entry.readingDone) {
+                                        Tone.Success
+                                    } else {
+                                        Tone.Warning
+                                    },
+                                ),
+                                Segment(
+                                    label = stringResource(R.string.view_collect),
+                                    dotTone = if (entry.owes) Tone.Danger else null,
+                                ),
+                            ),
+                            selected = view,
+                            onSelect = { view = it },
+                        )
+
+                        when (view) {
+                            VIEW_READING -> ReadingPanel(
+                                house = entry,
+                                busy = busy,
+                                onRead = onRead,
+                            )
+
+                            VIEW_PAYMENT -> PaymentPanel(
+                                house = entry,
+                                rate = sheetRate,
+                                busy = busy,
+                                onCollect = onCollect,
+                            )
+
+                            else -> OverviewPanel(
+                                house = entry,
+                                onGoCollect = { view = VIEW_PAYMENT },
+                                onGoReading = { view = VIEW_READING },
+                            )
+                        }
+                    }
+
+                    OutlineButton(
+                        text = stringResource(R.string.back),
+                        onClick = onBack,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
-    }
-
-    when (sheet) {
-        Sheet.Reading -> house?.let {
-            ReadingDialog(
-                house = it,
-                busy = busy,
-                onDismiss = { sheet = null },
-                onConfirm = { current, note, estimated, kwh, reason ->
-                    sheet = null
-                    onRead(current, note, estimated, kwh, reason)
-                },
-            )
-        }
-
-        Sheet.Collection -> house?.let {
-            CollectionDialog(
-                house = it,
-                rate = sheetRate,
-                busy = busy,
-                onDismiss = { sheet = null },
-                onConfirm = { amount, currency, rate, note ->
-                    sheet = null
-                    onCollect(amount, currency, rate, note)
-                },
-            )
-        }
-
-        null -> Unit
-    }
-
-    outcome?.let { result ->
-        val context = LocalContext.current
-
-        OutcomeDialog(
-            outcome = result,
-            onRetry = onRetryWrite,
-            onShare = { receipt -> shareReceipt(context, receipt) },
-            onDismiss = onDismissOutcome,
-        )
     }
 }
 
@@ -253,135 +300,272 @@ private fun shareReceipt(context: Context, receipt: String) {
     context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_receipt)))
 }
 
+/** Who this is: the panel's tile, the name, the type and state badges, and the meta grid. */
 @Composable
-private fun HouseFacts(house: House) {
+private fun IdentityCard(house: House) {
     MotoCard {
-        // The name is already in the app bar; repeating it here only made the card taller than its
-        // content. What the collector needs on this line is the figure, on the far side of the card.
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
+            Avatar(name = house.name, size = 48.dp)
+
+            Spacer(Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.house_balance),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = house.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+
+                Spacer(Modifier.height(6.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Badge(
+                        text = if (house.isMetered) {
+                            stringResource(R.string.house_metered)
+                        } else {
+                            stringResource(R.string.house_flat)
+                        },
+                        tone = if (house.isMetered) Tone.Info else Tone.Violet,
+                    )
+
+                    Badge(
+                        text = if (house.status == "inactive") {
+                            stringResource(R.string.house_inactive)
+                        } else {
+                            stringResource(R.string.house_active)
+                        },
+                        tone = if (house.status == "inactive") Tone.Neutral else Tone.Success,
+                    )
+
+                    if (house.exempt) {
+                        Badge(stringResource(R.string.house_exempt), Tone.Info)
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (house.meterNo != null) {
+                        MetaLine(stringResource(R.string.house_meter_short, house.meterNo))
+                    }
+                    if (house.phone != null) {
+                        MetaLine(house.phone)
+                    }
+                    if (house.discountPercent != "0.00") {
+                        MetaLine(stringResource(R.string.house_discount_line, house.discountPercent))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetaLine(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/**
+ * The balance, the way the panel shows it: the label above, the figure large in red or green, and the
+ * household's state as a big badge on the far side.
+ */
+@Composable
+private fun BalanceCard(house: House) {
+    MotoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                MicroLabel(stringResource(R.string.house_balance))
+
+                Spacer(Modifier.height(4.dp))
+
+                Amount(
+                    value = Money.usd(house.balance),
+                    tone = if (house.owes) Tone.Danger else Tone.Success,
+                    style = MaterialTheme.typography.displaySmall,
+                )
+
+                Spacer(Modifier.height(4.dp))
+
                 Text(
-                    text = Money.usd(house.balance),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = if (house.owes) toneInk(Tone.Money) else toneInk(Tone.Neutral),
+                    text = if (house.owes) {
+                        stringResource(R.string.balance_due_line)
+                    } else if (house.flatAndNotBilled) {
+                        stringResource(R.string.house_not_billed)
+                    } else {
+                        stringResource(R.string.balance_clear_line)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            if (house.credit != "0.00") {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = stringResource(R.string.house_credit),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(horizontalAlignment = Alignment.End) {
+                Badge(
+                    text = if (house.owes) {
+                        stringResource(R.string.due_label)
+                    } else {
+                        stringResource(R.string.settled_label)
+                    },
+                    tone = if (house.owes) Tone.Danger else Tone.Success,
+                    size = BadgeSize.Large,
+                )
+
+                if (house.credit != "0.00") {
+                    Spacer(Modifier.height(6.dp))
+                    MicroLabel(stringResource(R.string.house_credit_row, Money.usd(house.credit)), tone = Tone.Success)
+                }
+
+                if (house.unpaidMonthsCount > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    MicroLabel(stringResource(R.string.house_months_count, house.unpaidMonthsCount))
+                }
+            }
+        }
+    }
+}
+
+/** The panel's overview: the this-cycle invoice, its lines, its total, and the way to collect. */
+@Composable
+private fun OverviewPanel(house: House, onGoCollect: () -> Unit, onGoReading: () -> Unit) {
+    val bill = house.bills.lastOrNull()
+
+    if (bill == null) {
+        MotoCard {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Tile(tone = Tone.Neutral, size = 48.dp) {
+                    Text(text = "—", style = MaterialTheme.typography.titleMedium)
+                }
+                Text(
+                    text = if (house.flatAndNotBilled) {
+                        stringResource(R.string.no_bill_flat)
+                    } else {
+                        stringResource(R.string.no_bill_metered)
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(R.string.no_bill_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+
+                if (house.isMetered && !house.readingDone) {
+                    PrimaryButton(
+                        text = stringResource(R.string.take_reading),
+                        onClick = onGoReading,
                     )
-                    Text(
-                        text = Money.usd(house.credit),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = toneInk(Tone.Good),
-                    )
+                }
+            }
+        }
+
+        return
+    }
+
+    MotoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.bill_of_period, bill.label),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                if (bill.number != null) {
+                    MicroLabel(bill.number)
+                }
+            }
+
+            Badge(text = billStatus(bill.remaining, bill.paid), tone = billStatusTone(bill.remaining, bill.paid))
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (bill.consumption != null) {
+                LineRow(stringResource(R.string.row_consumption), bill.consumption + " kWh")
+            }
+
+            if (bill.discount != "0.00") {
+                LineRow(stringResource(R.string.row_discount), Money.usd(bill.discount), valueTone = Tone.Success)
+            }
+
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+            LineRow(
+                label = stringResource(R.string.row_total_bill),
+                value = Money.usd(bill.total),
+                valueStyle = MaterialTheme.typography.titleSmall,
+                muted = false,
+            )
+
+            if (bill.paid != "0.00") {
+                LineRow(stringResource(R.string.row_paid), "− " + Money.usd(bill.paid), valueTone = Tone.Success)
+            }
+
+            if (bill.remaining != "0.00") {
+                LineRow(
+                    label = stringResource(R.string.row_remaining_bill),
+                    value = Money.usd(bill.remaining),
+                    valueTone = Tone.Danger,
+                )
+            }
+        }
+
+        if (house.unpaidMonths.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            SectionHeading(stringResource(R.string.house_months))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                house.unpaidMonths.forEach { month ->
+                    LineRow(label = month.label, value = Money.usd(month.remaining), valueTone = Tone.Danger)
                 }
             }
         }
 
         Spacer(Modifier.height(14.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chip(if (house.isMetered) stringResource(R.string.house_metered) else stringResource(R.string.house_flat))
-            if (house.meterNo != null) Chip(house.meterNo)
-            if (house.exempt) Chip(stringResource(R.string.house_exempt), Tone.Info)
-        }
-
-        if (house.unpaidMonths.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text = stringResource(R.string.house_months),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                house.unpaidMonths.take(3).forEach { month ->
-                    Chip(month.label + " · " + Money.usd(month.remaining), Tone.Money)
-                }
-                if (house.unpaidMonths.size > 3) {
-                    Chip("+" + (house.unpaidMonths.size - 3).toString())
-                }
-            }
-        }
-
-        if (house.isMetered) {
-            Spacer(Modifier.height(14.dp))
-
-            // Labelled facts rather than an unlabelled row of chips: at a door the difference between
-            // «السابق» and the reading he just took is the difference between two numbers and one.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.ElectricMeter,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-
-                Spacer(Modifier.width(6.dp))
-
-                Text(
-                    text = if (house.readingDone) {
-                        stringResource(R.string.house_reading_done, house.readingValue ?: "")
-                    } else {
-                        stringResource(R.string.house_not_read)
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = toneInk(if (house.readingDone) Tone.Good else Tone.Money),
-                )
-
-                if (house.readingEstimated) {
-                    Spacer(Modifier.width(6.dp))
-                    Chip(stringResource(R.string.house_estimated))
-                }
-
-                Spacer(Modifier.weight(1f))
-
-                Text(
-                    text = stringResource(R.string.house_previous, house.previousValue),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        if (house.owes) {
+            PrimaryButton(text = stringResource(R.string.house_action_collect), onClick = onGoCollect)
+        } else {
+            Alert(text = stringResource(R.string.balance_clear_line), tone = Tone.Success)
         }
     }
-}
 
-@Composable
-private fun Invoices(house: House) {
-    if (house.bills.isEmpty()) {
-        return
-    }
-
-    SectionTitle(stringResource(R.string.house_invoices))
-    house.bills.reversed().forEach { bill ->
-        MotoCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(bill.label, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = bill.number.orEmpty(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(Money.usd(bill.total), style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(4.dp))
-                    if (bill.remaining == "0.00") {
-                        Chip(stringResource(R.string.invoice_paid), Tone.Good)
-                    } else {
-                        Chip(stringResource(R.string.invoice_left, Money.usd(bill.remaining)), Tone.Money)
+    // The rest of the household's invoices, the way the panel lists recent bills.
+    if (house.bills.size > 1) {
+        SectionHeading(stringResource(R.string.house_invoices))
+        MotoCard(padding = 14.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                house.bills.reversed().forEach { line ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = line.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Amount(
+                            value = Money.usd(line.total),
+                            tone = Tone.Neutral,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(MaterialTheme.shapes.extraSmall)
+                                .background(toneInk(billStatusTone(line.remaining, line.paid))),
+                        )
                     }
                 }
             }
@@ -389,204 +573,480 @@ private fun Invoices(house: House) {
     }
 }
 
+/** The reading: the input while it is still to be taken, the record once it is in. */
 @Composable
-private fun ReadingDialog(
+private fun ReadingPanel(
     house: House,
     busy: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String?, Boolean, String, String?) -> Unit,
+    onRead: (String, String?, Boolean, String, String?) -> Unit,
 ) {
-    var current by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
-    var estimated by rememberSaveable { mutableStateOf(false) }
-    var kwh by rememberSaveable { mutableStateOf("") }
-    var reason by rememberSaveable { mutableStateOf("") }
+    if (!house.isMetered) {
+        MotoCard {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Tile(tone = Tone.Neutral, size = 48.dp) {
+                    Text(text = "$", style = MaterialTheme.typography.titleMedium)
+                }
+                Text(stringResource(R.string.no_meter_needed), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = stringResource(R.string.no_meter_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
 
-    val valid = if (estimated) {
-        kwh.isNotBlank() && reason.isNotBlank()
-    } else {
-        current.isNotBlank()
+        return
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.read_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    if (house.readingDone) {
+        MotoCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = house.name,
-                    style = MaterialTheme.typography.titleMedium,
+                    text = stringResource(R.string.reading_recorded_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
                 )
-                if (house.previousValue != "0.00") {
-                    Text(
-                        text = stringResource(R.string.house_previous, house.previousValue),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                if (! estimated) {
-                    OutlinedTextField(
-                        value = current,
-                        onValueChange = { current = it },
-                        label = { Text(stringResource(R.string.read_current)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = kwh,
-                        onValueChange = { kwh = it },
-                        label = { Text(stringResource(R.string.read_kwh)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = reason,
-                        onValueChange = { reason = it },
-                        label = { Text(stringResource(R.string.read_reason)) },
-                        singleLine = false,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = estimated, onCheckedChange = { estimated = it })
-                    Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.read_estimated))
-                }
-
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text(stringResource(R.string.field_note)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Badge(stringResource(R.string.done), Tone.Success)
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = valid && !busy,
-                onClick = {
-                    onConfirm(
-                        current.trim(),
-                        note.takeIf { it.isNotBlank() },
-                        estimated,
-                        kwh.trim(),
-                        reason.takeIf { it.isNotBlank() },
-                    )
-                },
-            ) {
-                if (busy) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Text(stringResource(R.string.save))
+
+            Spacer(Modifier.height(12.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LineRow(stringResource(R.string.read_prev_row), house.previousValue)
+                LineRow(stringResource(R.string.read_current_row), house.readingValue.orEmpty())
+
+                house.bills.lastOrNull()?.consumption?.let { consumption ->
+                    LineRow(stringResource(R.string.row_consumption), consumption + " kWh")
                 }
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
+
+            if (house.readingEstimated) {
+                Spacer(Modifier.height(10.dp))
+                Alert(text = stringResource(R.string.read_estimated), tone = Tone.Warning)
+            }
+        }
+
+        return
+    }
+
+    var current by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
+    var estimatedOpen by rememberSaveable { mutableStateOf(false) }
+
+    MotoCard {
+        Text(stringResource(R.string.take_reading), style = MaterialTheme.typography.titleSmall)
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = stringResource(R.string.read_previous_hint, house.previousValue),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        FieldBox(
+            label = stringResource(R.string.read_current),
+            value = current,
+            onChange = { current = it },
+            keyboard = KeyboardType.Decimal,
+            align = TextAlign.Center,
+            textSize = 24.sp,
+            placeholder = "0",
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        FieldBox(
+            label = stringResource(R.string.field_note),
+            value = note,
+            onChange = { note = it },
+            keyboard = KeyboardType.Text,
+            placeholder = "",
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        PrimaryButton(
+            text = stringResource(R.string.read_save),
+            onClick = { onRead(current.trim(), note.takeIf { it.isNotBlank() }, false, "", null) },
+            enabled = current.isNotBlank(),
+            busy = busy,
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlineButton(
+            text = stringResource(R.string.read_estimated_open),
+            onClick = { estimatedOpen = true },
+            modifier = Modifier.fillMaxWidth(),
+            tone = Tone.Warning,
+        )
+    }
+
+    if (estimatedOpen) {
+        EstimatedReadingDialog(
+            house = house,
+            busy = busy,
+            onDismiss = { estimatedOpen = false },
+            onConfirm = { kwh, reason ->
+                estimatedOpen = false
+                onRead("", null, true, kwh, reason)
+            },
+        )
+    }
 }
 
+/** The money: which currency is in his hand, how much, and the way to record it. */
 @Composable
-private fun CollectionDialog(
+private fun PaymentPanel(
     house: House,
     rate: Double?,
     busy: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String?, String?) -> Unit,
+    onCollect: (String, String, String?, String?) -> Unit,
 ) {
+    if (!house.owes) {
+        MotoCard {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Tile(tone = Tone.Success, size = 48.dp) {
+                    Text(text = "✓", style = MaterialTheme.typography.titleMedium)
+                }
+                Text(stringResource(R.string.collect_nothing_title), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = stringResource(R.string.collect_nothing_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        return
+    }
+
     var currency by rememberSaveable { mutableStateOf("usd") }
     var amount by rememberSaveable { mutableStateOf(house.balance) }
     var typedRate by rememberSaveable { mutableStateOf(rate?.let { Money.rateText(it) } ?: "") }
     var note by rememberSaveable { mutableStateOf("") }
 
-    val needsRate = currency == "lbp"
-    val rateGiven = ! needsRate || typedRate.isNotBlank()
-    val valid = amount.isNotBlank() && amount != "0" && rateGiven
+    val lira = currency == "lbp"
+    val valid = amount.isNotBlank() && amount != "0" && (!lira || typedRate.isNotBlank())
+
+    MotoCard {
+        Alert(
+            text = stringResource(R.string.collect_balance, Money.usd(house.balance)),
+            tone = Tone.Neutral,
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        MicroLabel(stringResource(R.string.collect_unit))
+
+        Spacer(Modifier.height(6.dp))
+
+        // Which currency is in his hand — two buttons, the active one filled, exactly as the panel.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CurrencyButton(
+                text = stringResource(R.string.collect_usd),
+                active = ! lira,
+                onClick = { currency = "usd"; amount = house.balance },
+                modifier = Modifier.weight(1f),
+            )
+            CurrencyButton(
+                text = stringResource(R.string.collect_lbp),
+                active = lira,
+                onClick = { currency = "lbp"; amount = "" },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        FieldBox(
+            label = if (lira) stringResource(R.string.collect_amount_lbp) else stringResource(R.string.collect_amount),
+            value = amount,
+            onChange = { amount = it },
+            keyboard = KeyboardType.Decimal,
+            prefix = if (lira) "LBP" else "$",
+            textSize = 20.sp,
+            placeholder = "0",
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlineButton(
+            text = stringResource(R.string.collect_full_balance, Money.usd(house.balance)),
+            onClick = { if (! lira) amount = house.balance },
+            enabled = ! lira,
+            height = 40.dp,
+        )
+
+        if (lira) {
+            Spacer(Modifier.height(14.dp))
+
+            FieldBox(
+                label = stringResource(R.string.collect_rate),
+                value = typedRate,
+                onChange = { typedRate = it },
+                keyboard = KeyboardType.Number,
+                placeholder = "0",
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                text = stringResource(if (rate == null) R.string.collect_no_rate else R.string.collect_rate_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        FieldBox(
+            label = stringResource(R.string.field_note),
+            value = note,
+            onChange = { note = it },
+            keyboard = KeyboardType.Text,
+            placeholder = "",
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        PrimaryButton(
+            text = stringResource(R.string.collect_confirm),
+            onClick = {
+                onCollect(
+                    amount.trim(),
+                    currency,
+                    if (lira) typedRate.trim() else null,
+                    note.takeIf { it.isNotBlank() },
+                )
+            },
+            enabled = valid,
+            busy = busy,
+        )
+    }
+}
+
+@Composable
+private fun CurrencyButton(text: String, active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (active) {
+        Surface2(modifier = modifier, onClick = onClick) {
+            Text(text = text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary)
+        }
+    } else {
+        OutlineButton(text = text, onClick = onClick, modifier = modifier)
+    }
+}
+
+/** A filled bar, the size of an outline button, for the active half of a pair. */
+@Composable
+private fun Surface2(modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+/** The panel's receipt: a green head with the amount, then what it settled and the way to send it. */
+@Composable
+private fun ReceiptCard(outcome: Outcome, onShare: (String) -> Unit, onDone: () -> Unit) {
+    MotoCard(padding = 0.dp) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Green)
+                .padding(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.payment_received),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = Color.White,
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            outcome.facts.firstOrNull { it.first == stringResource(R.string.outcome_collected) }
+                ?.second
+                ?.let { collected ->
+                    Text(
+                        text = collected,
+                        style = MaterialTheme.typography.displaySmall.copy(fontFeatureSettings = "tnum"),
+                        color = Color.White,
+                    )
+                }
+        }
+
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            outcome.facts.forEach { (label, value) ->
+                if (value.isNotBlank() && label != stringResource(R.string.outcome_collected)) {
+                    LineRow(label = label, value = value)
+                }
+            }
+
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+            MicroLabel(stringResource(R.string.receipt_heading))
+
+            SelectionContainer {
+                Text(
+                    text = outcome.receipt.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            PrimaryButton(
+                text = stringResource(R.string.share_receipt),
+                onClick = { onShare(outcome.receipt.orEmpty()) },
+            )
+
+            OutlineButton(
+                text = stringResource(R.string.done),
+                onClick = onDone,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/**
+ * A labelled field, the panel's `kt-input`: the label above, a bordered box below, the value in
+ * tabular figures.
+ *
+ * Written by hand rather than with a Material text field because the panel's fields have no floating
+ * label and no underline — and a form that looks like a different product is the whole thing the owner
+ * noticed.
+ */
+@Composable
+private fun FieldBox(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    keyboard: KeyboardType,
+    prefix: String? = null,
+    placeholder: String = "0",
+    align: TextAlign = TextAlign.Start,
+    textSize: TextUnit = 16.sp,
+    enabled: Boolean = true,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        MicroLabel(label)
+        Spacer(Modifier.height(5.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (prefix != null) {
+                Text(
+                    text = prefix,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                enabled = enabled,
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = textSize,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFeatureSettings = "tnum",
+                    textAlign = align,
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** The estimate path: a dead meter is the office's decision, and it needs its reason in writing. */
+@Composable
+private fun EstimatedReadingDialog(
+    house: House,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit,
+) {
+    var kwh by rememberSaveable { mutableStateOf("") }
+    var reason by rememberSaveable { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.collect_title)) },
+        title = { Text(stringResource(R.string.read_estimated_open)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(house.name, style = MaterialTheme.typography.titleMedium)
+                Text(house.name, style = MaterialTheme.typography.titleSmall)
                 Text(
-                    text = stringResource(R.string.collect_balance, Money.usd(house.balance)),
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = stringResource(R.string.read_estimated_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = currency == "usd",
-                        onClick = { currency = "usd"; amount = house.balance },
-                        label = { Text(stringResource(R.string.collect_usd)) },
-                    )
-                    FilterChip(
-                        selected = currency == "lbp",
-                        onClick = { currency = "lbp"; amount = "" },
-                        label = { Text(stringResource(R.string.collect_lbp)) },
-                    )
-                }
-
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { amount = it },
-                    label = {
-                        Text(stringResource(if (currency == "lbp") R.string.collect_amount_lbp else R.string.collect_amount))
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
+                FieldBox(
+                    label = stringResource(R.string.read_kwh),
+                    value = kwh,
+                    onChange = { kwh = it },
+                    keyboard = KeyboardType.Decimal,
                 )
 
-                if (needsRate) {
-                    OutlinedTextField(
-                        value = typedRate,
-                        onValueChange = { typedRate = it },
-                        label = { Text(stringResource(R.string.collect_rate)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = stringResource(
-                            if (rate == null) R.string.collect_no_rate else R.string.collect_rate_hint,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text(stringResource(R.string.field_note)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                FieldBox(
+                    label = stringResource(R.string.read_reason),
+                    value = reason,
+                    onChange = { reason = it },
+                    keyboard = KeyboardType.Text,
+                    placeholder = "",
                 )
             }
         },
         confirmButton = {
             TextButton(
-                enabled = valid && !busy,
-                onClick = {
-                    onConfirm(
-                        amount.trim(),
-                        currency,
-                        if (needsRate) typedRate.trim() else null,
-                        note.takeIf { it.isNotBlank() },
-                    )
-                },
+                enabled = kwh.isNotBlank() && reason.isNotBlank() && ! busy,
+                onClick = { onConfirm(kwh.trim(), reason.trim()) },
             ) {
-                if (busy) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Text(stringResource(R.string.collect_confirm))
-                }
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
@@ -594,77 +1054,15 @@ private fun CollectionDialog(
 }
 
 @Composable
-private fun OutcomeDialog(
-    outcome: Outcome,
-    onRetry: () -> Unit,
-    onShare: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(outcome.title) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                outcome.facts.forEach { (label, value) ->
-                    if (value.isBlank()) {
-                        Text(label, style = MaterialTheme.typography.bodyLarge)
-                    } else {
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(text = value, style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                }
+private fun billStatus(remaining: String, paid: String): String = when {
+    remaining == "0.00" -> stringResource(R.string.bill_status_paid)
+    paid != "0.00" -> stringResource(R.string.bill_status_partial)
+    else -> stringResource(R.string.bill_status_unpaid)
+}
 
-                outcome.problem?.let { problem ->
-                    ProblemCard(
-                        title = stringResource(R.string.outcome_problem_title),
-                        message = problem.message,
-                        code = problem.code,
-                    )
-                }
-
-                // The office's own receipt, shown as the household will receive it — and selectable,
-                // so a collector without WhatsApp can still copy it by hand.
-                outcome.receipt?.let { receipt ->
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.receipt_heading),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    SelectionContainer {
-                        Text(
-                            text = receipt,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            when {
-                outcome.retryable -> Button(onClick = onRetry) { Text(stringResource(R.string.retry_send)) }
-
-                outcome.receipt != null -> Button(onClick = { onShare(outcome.receipt) }) {
-                    Text(stringResource(R.string.share_receipt))
-                }
-
-                else -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) }
-            }
-        },
-        dismissButton = if (outcome.retryable || outcome.receipt != null) {
-            { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } }
-        } else {
-            null
-        },
-    )
+@Composable
+private fun billStatusTone(remaining: String, paid: String): Tone = when {
+    remaining == "0.00" -> Tone.Success
+    paid != "0.00" -> Tone.Warning
+    else -> Tone.Danger
 }

@@ -1,6 +1,10 @@
 package com.lamahuissn.motoapp.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,20 +18,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,20 +37,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.AreasBoard
 import com.lamahuissn.motoapp.data.MotoArea
+import java.time.LocalDate
+import java.time.LocalTime
 
 /**
- * The office's day, as the collector starts it.
+ * The office's day, as the collector starts it — the panel's own dashboard, on a phone.
  *
- * The strip at the top is the day in three counts — how many areas, how many houses, how much of the
- * walk is read — and then the areas themselves, each with what it owes in the office's amber. Counts
- * are counted here; money is never added up on the phone, so the strip carries no total.
+ * The structure is the collector's web dashboard, element for element: the brand bar with the ⚡ mark,
+ * the greeting and the date, the shift's counts as stat cards with a tinted tile each, then the areas
+ * as rows — a glyph tile, the name, a meta line, and what the street owes on the far side in the
+ * panel's destructive red, with «مستحق» under it.
+ *
+ * Counts are counted here; money is never added up on the phone, so no card carries a total.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AreasScreen(
     userName: String,
@@ -60,84 +69,72 @@ fun AreasScreen(
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            // A medium bar, not the small one: the title carries a second line (whose session this
-            // is), and a 64dp bar clips it.
-            MediumTopAppBar(
-                title = {
-                    Column {
-                        Text(stringResource(R.string.areas_title), style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            text = userName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        AppBar(
+            userName = userName,
+            onRefresh = onRefresh,
+            onSignOut = { confirmingSignOut = true },
+        )
+
+        when (load) {
+            Load.Idle, Load.Busy -> BusyBox()
+
+            is Load.Failed -> Column(Modifier.padding(16.dp)) {
+                ProblemCard(
+                    title = stringResource(R.string.areas_failed_title),
+                    message = problem?.message ?: load.message,
+                    code = problem?.code,
+                    onRetry = onRefresh,
+                )
+            }
+
+            is Load.Ready -> {
+                val board = load.value
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    item { Greeting(userName = userName, period = board.periodText) }
+
+                    item { ShiftCounts(board) }
+
+                    item {
+                        SectionHeading(
+                            text = stringResource(R.string.areas_section),
+                            trailing = stringResource(R.string.areas_count, board.areas.size),
                         )
                     }
-                },
-                actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
-                    }
-                    IconButton(onClick = { confirmingSignOut = true }) {
-                        Icon(Icons.Filled.SwitchAccount, contentDescription = stringResource(R.string.sign_out))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-        },
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (load) {
-                Load.Idle, Load.Busy -> BusyBox()
-
-                is Load.Failed -> Column(Modifier.padding(20.dp)) {
-                    ProblemCard(
-                        title = stringResource(R.string.areas_failed_title),
-                        message = problem?.message ?: load.message,
-                        code = problem?.code,
-                        onRetry = onRefresh,
-                    )
-                }
-
-                is Load.Ready -> {
-                    val board = load.value
 
                     if (board.areas.isEmpty()) {
-                        Column(Modifier.padding(20.dp)) {
-                            Text(stringResource(R.string.areas_empty), style = MaterialTheme.typography.bodyLarge)
+                        item {
+                            MotoCard {
+                                Text(
+                                    text = stringResource(R.string.areas_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            item {
-                                BoardStrip(board)
-                                Spacer(Modifier.height(6.dp))
-                                SectionTitle(stringResource(R.string.areas_section) + " · " + board.period)
-                            }
+                    }
 
-                            items(board.areas, key = { it.name }) { area ->
-                                AreaCard(area = area, onOpen = { onOpen(area) })
-                            }
+                    items(board.areas, key = { it.name }) { area ->
+                        AreaRow(area = area, onOpen = { onOpen(area) })
+                    }
 
-                            if (problem != null) {
-                                item {
-                                    ProblemCard(
-                                        title = stringResource(R.string.areas_failed_title),
-                                        message = problem.message,
-                                        code = problem.code,
-                                        onRetry = onRefresh,
-                                    )
-                                }
-                            }
+                    if (problem != null) {
+                        item {
+                            ProblemCard(
+                                title = stringResource(R.string.areas_failed_title),
+                                message = problem.message,
+                                code = problem.code,
+                                onRetry = onRefresh,
+                            )
                         }
                     }
                 }
@@ -162,84 +159,221 @@ fun AreasScreen(
     }
 }
 
-/** The day in three counts: areas, houses, and how much of the reading is done. */
+/**
+ * The panel's app bar: the brand tile, the product's name over the collector's, and the two things he
+ * does from anywhere — refresh the day, or hand the phone over.
+ */
 @Composable
-private fun BoardStrip(board: AreasBoard) {
+private fun AppBar(userName: String, onRefresh: () -> Unit, onSignOut: () -> Unit) {
+    Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Tile(tone = Tone.Primary, size = 36.dp) {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = LocalContentColor.current,
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                MicroLabel(userName)
+            }
+
+            IconAction(Icons.Filled.Refresh, stringResource(R.string.refresh), onRefresh)
+            Spacer(Modifier.width(8.dp))
+            IconAction(Icons.Filled.SwitchAccount, stringResource(R.string.sign_out), onSignOut)
+        }
+
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+@Composable
+private fun IconAction(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/** The panel's heading: a greeting that matches the hour, this collector's name, and the date. */
+@Composable
+private fun Greeting(userName: String, period: String) {
+    val morning = LocalTime.now().hour < 12
+
+    Column(modifier = Modifier.padding(bottom = 4.dp)) {
+        Text(
+            text = stringResource(
+                if (morning) R.string.greeting_morning else R.string.greeting_evening,
+                userName,
+            ),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = LocalDate.now().toString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            Badge(text = period, tone = Tone.Primary)
+        }
+    }
+}
+
+/** The shift in three counts, each a panel stat card: a label, a figure, and a tinted tile. */
+@Composable
+private fun ShiftCounts(board: AreasBoard) {
     val houses = board.areas.sumOf { it.active }
     val read = board.areas.sumOf { it.readingDone }
     val toRead = board.areas.sumOf { it.readingTotal }
+    val owing = board.areas.count { it.owes }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SummaryTile(
+        StatCard(
             label = stringResource(R.string.strip_areas),
             value = board.areas.size.toString(),
+            sub = stringResource(R.string.strip_houses_value, houses),
             tone = Tone.Info,
+            icon = Icons.Filled.Place,
             modifier = Modifier.weight(1f),
         )
-        SummaryTile(
-            label = stringResource(R.string.strip_houses),
-            value = houses.toString(),
-            modifier = Modifier.weight(1f),
-        )
-        SummaryTile(
+        StatCard(
             label = stringResource(R.string.strip_readings),
             value = "$read/$toRead",
-            tone = if (toRead > 0 && read >= toRead) Tone.Good else Tone.Neutral,
+            sub = stringResource(R.string.strip_readings_sub),
+            tone = if (toRead > 0 && read >= toRead) Tone.Success else Tone.Warning,
+            icon = Icons.Filled.Place,
+            modifier = Modifier.weight(1f),
+        )
+        StatCard(
+            label = stringResource(R.string.strip_owing),
+            value = owing.toString(),
+            sub = stringResource(R.string.strip_owing_sub),
+            tone = if (owing > 0) Tone.Danger else Tone.Success,
+            icon = Icons.Filled.Place,
             modifier = Modifier.weight(1f),
         )
     }
 }
 
 @Composable
-private fun AreaCard(area: MotoArea, onOpen: () -> Unit) {
-    MotoCard(onClick = onOpen) {
+private fun StatCard(
+    label: String,
+    value: String,
+    sub: String,
+    tone: Tone,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    MotoCard(modifier = modifier, padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            LeadingMark(Icons.Filled.Place, Tone.Info)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(2.dp))
+                Amount(value = value, tone = Tone.Neutral, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(2.dp))
+                MicroLabel(sub)
+            }
 
-            Spacer(Modifier.width(14.dp))
+            Tile(tone = tone, size = 32.dp) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = LocalContentColor.current,
+                )
+            }
+        }
+    }
+}
+
+/** One area, as the panel's route row: a glyph, the name, a meta line, and what the street owes. */
+@Composable
+private fun AreaRow(area: MotoArea, onOpen: () -> Unit) {
+    MotoCard(onClick = onOpen, padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Tile(tone = Tone.Info, size = 40.dp) {
+                Icon(
+                    imageVector = Icons.Filled.Place,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = LocalContentColor.current,
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(area.name, style = MaterialTheme.typography.titleLarge)
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Chip(stringResource(R.string.area_houses, area.active))
-
-                    if (area.readingTotal > 0) {
-                        if (area.readingLeft == 0) {
-                            Chip(stringResource(R.string.area_reading_done), Tone.Good)
-                        } else {
-                            Chip(
-                                stringResource(R.string.area_reading_left, area.readingDone, area.readingTotal),
-                                Tone.Money,
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = area.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.area_row_meta, area.houses, area.active),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = stringResource(R.string.area_owed),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = Money.usd(area.owed),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = if (area.owes) toneInk(Tone.Money) else toneInk(Tone.Neutral),
-                )
+                if (area.owes) {
+                    Amount(
+                        value = Money.usd(area.owed),
+                        tone = Tone.Danger,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    MicroLabel(stringResource(R.string.due_label))
+                } else {
+                    Amount(value = "0", tone = Tone.Success, style = MaterialTheme.typography.titleSmall)
+                    MicroLabel(stringResource(R.string.settled_label), tone = Tone.Success)
+                }
             }
 
+            Spacer(Modifier.width(6.dp))
+
+            // Forward, in Arabic, is to the left — the same direction the panel's own rows point.
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                imageVector = Icons.Filled.KeyboardArrowLeft,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(18.dp),
             )
         }
     }
