@@ -36,6 +36,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -92,9 +93,18 @@ fun HouseScreen(
     onRetryWrite: () -> Unit,
     onDismissOutcome: () -> Unit,
     staleAsOf: String? = null,
+    queueOwed: Int = 0,
+    onOpenQueue: () -> Unit = {},
 ) {
     val house = (load as? Load.Ready)?.value
     val context = LocalContext.current
+    val scroll = rememberScrollState()
+
+    // A write landing is the moment the collector MUST see: he may be at the bottom of the payment form
+    // with the keyboard up, and «did it go through?» has to be answered without him hunting for it.
+    LaunchedEffect(outcome) {
+        if (outcome != null) scroll.animateScrollTo(0)
+    }
 
     // The view follows what just happened: a receipt belongs on the payment panel, a recorded reading
     // on the reading panel — the same place the web app leaves the collector standing.
@@ -164,6 +174,16 @@ fun HouseScreen(
             )
         }
 
+        // …and whatever is still owed to the office is never more than a tap away, on the screen where
+        // the collector is most likely to be holding cash (spec 010).
+        if (queueOwed > 0) {
+            QueueCard(
+                owed = queueOwed,
+                onOpen = onOpenQueue,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+            )
+        }
+
         when (load) {
             Load.Idle, Load.Busy -> BusyBox()
 
@@ -182,7 +202,7 @@ fun HouseScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(scroll)
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -201,22 +221,40 @@ fun HouseScreen(
                     }
 
                     if (outcome != null && outcome.kind == OutcomeKind.Unknown) {
-                        Alert(
-                            text = outcome.problem?.message
-                                ?: stringResource(R.string.outcome_unknown_hint),
-                            tone = Tone.Warning,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlineButton(
-                                text = stringResource(R.string.retry_send),
-                                onClick = onRetryWrite,
-                                tone = Tone.Warning,
-                                modifier = Modifier.weight(1f),
-                            )
+                        // A write the office has not answered about yet is RECORDED, not failed — and the
+                        // collector may be holding cash against it. So it reads as «سُجّل في هاتفك» with
+                        // what it was, and it never invites him to take the money a second time.
+                        MotoCard(padding = 14.dp) {
+                            Alert(text = outcome.title, tone = Tone.Warning)
+                            Spacer(Modifier.height(10.dp))
+
+                            outcome.facts.forEach { (label, value) ->
+                                Text(
+                                    text = if (value.isBlank()) label else "$label — $value",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlineButton(
+                                    text = stringResource(R.string.queue_send_now),
+                                    onClick = onRetryWrite,
+                                    tone = Tone.Warning,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlineButton(
+                                    text = stringResource(R.string.queue_open),
+                                    onClick = onOpenQueue,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
                             OutlineButton(
                                 text = stringResource(R.string.done),
                                 onClick = onDismissOutcome,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     }

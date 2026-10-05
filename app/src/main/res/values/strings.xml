@@ -137,7 +137,10 @@
     <string name="outcome_collection_title">سُجّل القبض</string>
     <string name="outcome_refused_title">رفض الخادم الطلب</string>
     <string name="outcome_queued_title">سُجّلت — بانتظار الشبكة</string>
-    <string name="outcome_queued_hint">السجل في هاتفك ولن يضيع؛ يُرسَل بنفس المفتاح عند رجوع الشبكة.</string>
+    <string name="outcome_queued_collection_title">سُجّل القبض في هاتفك — بانتظار الشبكة</string>
+    <string name="outcome_queued_reading_title">سُجّلت القراءة في هاتفك — بانتظار الشبكة</string>
+    <string name="outcome_queued_hint">السجل في هاتفك ولن يضيع؛ يُرسَل بنفس المفتاح عند رجوع الشبكة — لا تُعِد القبض.</string>
+    <string name="queue_open">افتح الطابور</string>
     <string name="outcome_refused_hint">الخادم رفض الطلب — السبب أدناه. لا شيء سُجِّل.</string>
     <string name="outcome_unknown_hint">لم يصل الجواب — أعِد الإرسال بالمفتاح نفسه؛ لا تُنشئ محاولة جديدة.</string>
     <string name="outcome_problem_title">سبب الرفض</string>

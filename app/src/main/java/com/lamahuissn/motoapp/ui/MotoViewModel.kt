@@ -835,7 +835,11 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
             else -> Outcome(
                 kind = OutcomeKind.Unknown,
-                title = app.getString(R.string.outcome_queued_title),
+                // The collector is holding cash: «recorded, waiting» is the sentence he needs, and it is
+                // not the same sentence for money and for a reading.
+                title = app.getString(
+                    if (entry.isMoney) R.string.outcome_queued_collection_title else R.string.outcome_queued_reading_title,
+                ),
                 facts = listOf(
                     entry.houseName to if (entry.isMoney) Money.usd(entry.amount.orEmpty()) else entry.currentReading.orEmpty(),
                     app.getString(R.string.outcome_queued_hint) to "",

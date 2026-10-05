@@ -304,50 +304,6 @@ fun AreasScreen(
     }
 }
 
-/**
- * The queue as one line on the day's screen (spec 010).
- *
- * At the TOP of the list, and only when something is owed: a collector holding cash against a record the
- * office has not answered about must not have to go looking for that fact. Tapping it opens the queue.
- */
-@Composable
-private fun QueueCard(owed: Int, onOpen: () -> Unit) {
-    MotoCard(onClick = onOpen, padding = 14.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Tile(tone = Tone.Warning, size = 36.dp) {
-                Icon(
-                    imageVector = Icons.Filled.CloudOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = LocalContentColor.current,
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.queue_card_title),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = pluralStringResource(R.plurals.queue_card_hint, owed, owed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowLeft,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
 /** The panel's heading: a greeting that matches the hour, this collector's name, and the date. */
 @Composable
 private fun Greeting(userName: String, period: String?) {

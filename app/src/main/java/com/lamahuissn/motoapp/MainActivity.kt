@@ -132,6 +132,7 @@ private fun MotoApp(model: MotoViewModel) {
             val house by model.house.collectAsState()
             val outcome by model.outcome.collectAsState()
             val rate by model.lbpRate.collectAsState()
+            val queue by model.queue.collectAsState()
 
             HouseScreen(
                 load = house,
@@ -146,6 +147,8 @@ private fun MotoApp(model: MotoViewModel) {
                 onRetryWrite = model::retryPending,
                 onDismissOutcome = model::clearOutcome,
                 staleAsOf = staleAsOf,
+                queueOwed = queue.count { it.isOpen },
+                onOpenQueue = model::openQueue,
             )
         }
 
