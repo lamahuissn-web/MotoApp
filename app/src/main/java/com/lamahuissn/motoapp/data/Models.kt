@@ -33,8 +33,44 @@ data class AreasBoard(
     val label: String?,
     val lbpRate: Double?,
     val areas: List<MotoArea>,
+    /** The collector's own day: what he took and what is still in his pocket. */
+    val stats: CollectorStats? = null,
 ) {
     val periodText: String get() = label ?: period
+}
+
+/**
+ * One collector's own money, as the office's dashboard shows it.
+ *
+ * Every figure is the server's — totals, counts and the cash position all come from the panel's own
+ * service, so the phone cannot hold a second version of «today».
+ */
+data class CollectorStats(
+    val todayTotal: String,
+    val todayCount: Int,
+    val monthTotal: String,
+    val monthCount: Int,
+    val inHand: String,
+    val handedTotal: String,
+    val handovers: List<Handover>,
+)
+
+/** Cash he has already walked to the office: a date, an amount, and whatever he wrote with it. */
+data class Handover(val date: String?, val amount: String, val note: String?)
+
+/** One household found by search: enough to recognise the door before walking to it. */
+data class SearchHit(
+    val id: Int,
+    val name: String,
+    val meterNo: String?,
+    val type: String,
+    val status: String,
+    val route: String?,
+    val balance: String,
+    val credit: String,
+    val owes: Boolean,
+) {
+    val isMetered: Boolean get() = type == "metered"
 }
 
 data class MotoArea(

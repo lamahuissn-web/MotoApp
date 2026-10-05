@@ -144,7 +144,7 @@
         <item quantity="many">%1$d شهرًا غير مدفوع</item>
         <item quantity="other">%1$d شهر غير مدفوع</item>
     </plurals>
-    <string name="area_row_meta">%1$s · %2$d نشط</string>
+    <string name="area_row_meta">نشط: %1$d · إجمالي: %2$d</string>
     <string name="due_label">مستحق</string>
     <string name="settled_label">مسدّد</string>
     <string name="strip_readings_sub">هذا الشهر</string>
@@ -188,6 +188,21 @@
     <string name="collect_nothing_title">لا شيء يُقبض</string>
     <string name="collect_nothing_body">لا رصيد ولا فاتورة لهذا الشهر — لا يوجد ما يُقبض الآن.</string>
     <string name="payment_received">تم استلام المبلغ</string>
+    <string name="stats_today">المحصل اليوم</string>
+    <string name="stats_month">هذا الشهر</string>
+    <string name="cash_in_hand">نقدية بذمتك</string>
+    <string name="cash_handed_line">سلّمت للمولّد حتى الآن %1$s</string>
+    <string name="required_badge">مطلوب</string>
+    <string name="search_placeholder">ابحث عن أي مشترك — بالاسم أو رقم العدّاد أو الهاتف</string>
+    <string name="search_results">النتائج</string>
+    <string name="search_empty">لا نتائج بهذا الاسم أو الرقم.</string>
+    <plurals name="payments_count">
+        <item quantity="one">دفعة واحدة</item>
+        <item quantity="two">دفعتان</item>
+        <item quantity="few">%1$d دفعات</item>
+        <item quantity="many">%1$d دفعة</item>
+        <item quantity="other">%1$d دفعة</item>
+    </plurals>
     <string name="problem_unreachable">لم يصل الهاتف إلى الخادم — تحقّق من الشبكة ثم أعِد المحاولة.</string>
     <string name="problem_unreadable">أجاب الخادم بردّ لا يعرفه التطبيق — أبلغ المكتب بالرمز المذكور.</string>
     <string name="problem_server_refused">رفض الخادم الطلب بلا سبب مكتوب.</string>

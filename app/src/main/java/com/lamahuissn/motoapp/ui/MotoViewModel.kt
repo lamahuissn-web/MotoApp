@@ -14,8 +14,11 @@ import com.lamahuissn.motoapp.data.House
 import com.lamahuissn.motoapp.data.MotoApi
 import com.lamahuissn.motoapp.data.MotoArea
 import com.lamahuissn.motoapp.data.ReadingAnswer
+import com.lamahuissn.motoapp.data.SearchHit
 import com.lamahuissn.motoapp.data.Session
 import com.lamahuissn.motoapp.data.TokenVault
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,6 +106,17 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val _lbpRate = MutableStateFlow<Double?>(null)
     val lbpRate: StateFlow<Double?> = _lbpRate.asStateFlow()
+
+    /**
+     * What the collector has asked the network by name.
+     *
+     * Search is not cached like the screens are: it is a question about a moment, and a stale answer to
+     * «where is this house» is worse than a wait.
+     */
+    private val _search = MutableStateFlow<Load<List<SearchHit>>>(Load.Idle)
+    val search: StateFlow<Load<List<SearchHit>>> = _search.asStateFlow()
+
+    private var searchJob: Job? = null
 
     /** The attempt whose answer is not known yet, kept across retries (see this class's docblock). */
     private var pending: Attempt? = null
@@ -249,6 +263,48 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         loadHouse(house.id)
     }
 
+    /**
+     * Find a household by name, meter number or phone — the panel's own global search.
+     *
+     * Typing is debounced by 300ms because every keystroke would otherwise be a request from a street
+     * with a bad signal; one character asks nothing at all (the server says so too, rather than the
+     * app deciding what a real query is).
+     */
+    fun search(query: String) {
+        searchJob?.cancel()
+
+        val token = _session.value?.token ?: return
+        val trimmed = query.trim()
+
+        if (trimmed.length < 2) {
+            _search.value = Load.Idle
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            delay(300)
+            _search.value = Load.Busy
+
+            when (val call = MotoApi.search(token, trimmed)) {
+                is ApiCall.Success -> _search.value = Load.Ready(call.value)
+                is ApiCall.Unreachable -> _search.value = Load.Failed(null)
+                else -> _search.value = Load.Ready(emptyList())
+            }
+        }
+    }
+
+    fun clearSearch() {
+        searchJob?.cancel()
+        _search.value = Load.Idle
+    }
+
+    /** Open a household found by search: there is no area sheet behind it, so going back goes home. */
+    fun openSearchHit(hit: SearchHit) {
+        clearSearch()
+        _screen.value = Screen.House(areaId = 0, areaName = hit.route.orEmpty(), houseId = hit.id)
+        loadHouse(hit.id)
+    }
+
     fun loadHouse(houseId: Int? = null) {
         val id = houseId ?: (screen.value as? Screen.House)?.houseId ?: return
         val token = _session.value?.token ?: return
@@ -283,7 +339,12 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     fun backToSheet() {
         val from = screen.value as? Screen.House
 
-        _screen.value = from?.let { Screen.Houses(it.areaId, it.areaName) } ?: Screen.Areas
+        // A household opened from a search has no sheet behind it: going back goes to the day's areas
+        // rather than asking the server for the houses of area «0».
+        _screen.value = from?.takeIf { it.areaId != 0 }
+            ?.let { Screen.Houses(it.areaId, it.areaName) }
+            ?: Screen.Areas
+
         _house.value = Load.Idle
         _problem.value = null
 

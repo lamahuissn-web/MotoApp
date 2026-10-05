@@ -67,11 +67,15 @@ private fun MotoApp(model: MotoViewModel) {
 
         Screen.Areas -> {
             val board by model.board.collectAsState()
+            val search by model.search.collectAsState()
 
             AreasScreen(
                 userName = session?.user?.name.orEmpty(),
                 load = board,
                 problem = problem,
+                search = search,
+                onSearch = model::search,
+                onOpenHit = model::openSearchHit,
                 onRefresh = model::loadAreas,
                 onSignOut = model::signOut,
                 onOpen = model::openArea,

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ElectricMeter
@@ -26,11 +28,13 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,18 +42,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.AreasBoard
+import com.lamahuissn.motoapp.data.CollectorStats
 import com.lamahuissn.motoapp.data.MotoArea
+import com.lamahuissn.motoapp.data.SearchHit
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -68,11 +78,17 @@ fun AreasScreen(
     userName: String,
     load: Load<AreasBoard>,
     problem: Problem?,
+    search: Load<List<SearchHit>>,
+    onSearch: (String) -> Unit,
+    onOpenHit: (SearchHit) -> Unit,
     onRefresh: () -> Unit,
     onSignOut: () -> Unit,
     onOpen: (MotoArea) -> Unit,
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+
+    val searching = query.trim().length >= 2
 
     Column(
         modifier = Modifier
@@ -110,29 +126,78 @@ fun AreasScreen(
                 ) {
                     item { Greeting(userName = userName, period = board.label) }
 
+                    // The web dashboard's first row: what he took today and what he has taken this
+                    // month — the collector's own money, summed by the office, never by the phone.
+                    board.stats?.let { stats ->
+                        item { MoneyRow(stats) }
+                    }
+
                     item { ShiftCounts(board) }
 
-                    item {
-                        SectionHeading(
-                            text = stringResource(R.string.areas_section),
-                            trailing = pluralStringResource(R.plurals.areas_count, board.areas.size, board.areas.size),
-                        )
+                    board.stats?.let { stats ->
+                        item { CashInHand(stats) }
                     }
 
-                    if (board.areas.isEmpty()) {
+                    item {
+                        SearchField(query = query, onChange = { query = it; onSearch(it) })
+                    }
+
+                    if (searching) {
                         item {
-                            MotoCard {
-                                Text(
-                                    text = stringResource(R.string.areas_empty),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            SectionHeading(
+                                text = stringResource(R.string.search_results),
+                                trailing = if (search is Load.Ready) {
+                                    (search as Load.Ready).value.size.toString()
+                                } else {
+                                    null
+                                },
+                            )
+                        }
+
+                        when (search) {
+                            Load.Idle, Load.Busy -> item { BusyBox() }
+
+                            is Load.Failed -> item {
+                                Alert(text = stringResource(R.string.problem_unreachable), tone = Tone.Danger)
+                            }
+
+                            is Load.Ready -> {
+                                if (search.value.isEmpty()) {
+                                    item { Alert(text = stringResource(R.string.search_empty), tone = Tone.Neutral) }
+                                } else {
+                                    items(search.value, key = { it.id }) { hit ->
+                                        SearchRow(hit = hit, onOpen = { onOpenHit(hit) })
+                                    }
+                                }
                             }
                         }
-                    }
+                    } else {
+                        item {
+                            SectionHeading(
+                                text = stringResource(R.string.areas_section),
+                                trailing = pluralStringResource(
+                                    R.plurals.areas_count,
+                                    board.areas.size,
+                                    board.areas.size,
+                                ),
+                            )
+                        }
 
-                    items(board.areas, key = { it.name }) { area ->
-                        AreaRow(area = area, onOpen = { onOpen(area) })
+                        if (board.areas.isEmpty()) {
+                            item {
+                                MotoCard {
+                                    Text(
+                                        text = stringResource(R.string.areas_empty),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+
+                        items(board.areas, key = { it.name }) { area ->
+                            AreaRow(area = area, onOpen = { onOpen(area) })
+                        }
                     }
 
                     if (problem != null) {
@@ -359,11 +424,7 @@ private fun AreaRow(area: MotoArea, onOpen: () -> Unit) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = stringResource(
-                        R.string.area_row_meta,
-                        pluralStringResource(R.plurals.houses_count, area.houses, area.houses),
-                        area.active,
-                    ),
+                    text = stringResource(R.string.area_row_meta, area.active, area.houses),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -388,6 +449,251 @@ private fun AreaRow(area: MotoArea, onOpen: () -> Unit) {
             Spacer(Modifier.width(6.dp))
 
             // Forward, in Arabic, is to the left — the same direction the panel's own rows point.
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowLeft,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The collector's own takings, as the panel's dashboard shows them: today beside this month, each with
+ * the count of payments under it and a tinted tile of its own.
+ */
+@Composable
+private fun MoneyRow(stats: CollectorStats) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        MoneyCard(
+            label = stringResource(R.string.stats_today),
+            total = stats.todayTotal,
+            count = stats.todayCount,
+            tone = Tone.Success,
+            icon = Icons.Filled.Payments,
+            modifier = Modifier.weight(1f),
+        )
+        MoneyCard(
+            label = stringResource(R.string.stats_month),
+            total = stats.monthTotal,
+            count = stats.monthCount,
+            tone = Tone.Primary,
+            icon = Icons.Filled.Payments,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun MoneyCard(
+    label: String,
+    total: String,
+    count: Int,
+    tone: Tone,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    MotoCard(modifier = modifier, padding = 12.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(3.dp))
+                Amount(value = Money.usd(total), style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(3.dp))
+                MicroLabel(pluralStringResource(R.plurals.payments_count, count, count))
+            }
+
+            Tile(tone = tone, size = 32.dp) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = LocalContentColor.current,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Cash still in the collector's pocket — the one figure that is his, and the only one he must be able
+ * to check before he hands anything over.
+ *
+ * Under it, the last few handovers: the dates behind the «سلّمت» figure, because a total with no dates
+ * under it is a number he has to take the office's word for.
+ */
+@Composable
+private fun CashInHand(stats: CollectorStats) {
+    MotoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                MicroLabel(stringResource(R.string.cash_in_hand))
+                Spacer(Modifier.height(4.dp))
+                Amount(
+                    value = Money.usd(stats.inHand),
+                    tone = Tone.Primary,
+                    style = MaterialTheme.typography.displaySmall,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.cash_handed_line, Money.usd(stats.handedTotal)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Badge(
+                text = stringResource(R.string.required_badge),
+                tone = if (stats.inHand != "0.00") Tone.Warning else Tone.Success,
+                size = BadgeSize.Large,
+            )
+        }
+
+        if (stats.handovers.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                stats.handovers.forEach { handover ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = listOfNotNull(handover.date, handover.note).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Amount(
+                            value = Money.usd(handover.amount),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The panel's search field: a bordered box with a magnifier and the collector's own question in it. */
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+
+        Spacer(Modifier.width(10.dp))
+
+        BasicTextField(
+            value = query,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = LocalTextStyle.current.copy(
+                fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.search_placeholder),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+/** One household as a search answer: enough to recognise the door before walking to it. */
+@Composable
+private fun SearchRow(hit: SearchHit, onOpen: () -> Unit) {
+    MotoCard(onClick = onOpen, padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Tile(tone = if (hit.isMetered) Tone.Info else Tone.Violet, size = 40.dp) {
+                Text(
+                    text = if (hit.isMetered) "MTR" else "FLT",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LocalContentColor.current,
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = hit.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+
+                    if (hit.status == "inactive") {
+                        Spacer(Modifier.width(6.dp))
+                        Badge(stringResource(R.string.house_inactive))
+                    }
+                }
+
+                Spacer(Modifier.height(2.dp))
+
+                Text(
+                    text = listOfNotNull(hit.route, hit.meterNo).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                if (hit.owes) {
+                    Amount(
+                        value = Money.usd(hit.balance),
+                        tone = Tone.Danger,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    MicroLabel(stringResource(R.string.due_label))
+                } else {
+                    Amount(value = "0", tone = Tone.Success, style = MaterialTheme.typography.titleSmall)
+                    MicroLabel(stringResource(R.string.settled_label), tone = Tone.Success)
+                }
+            }
+
+            Spacer(Modifier.width(6.dp))
+
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowLeft,
                 contentDescription = null,

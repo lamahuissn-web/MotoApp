@@ -10,6 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 /**
@@ -98,6 +99,18 @@ object MotoApi {
     suspend fun houses(token: String, routeId: Int, period: String? = null): ApiCall<AreaSheet> = call(
         Request.Builder().url("$baseUrl/api/v1/areas/$routeId/houses${periodQuery(period)}").authorized(token).build(),
     ) { parseSheet(it) }
+
+    /**
+     * One household, from anywhere in the network.
+     *
+     * A collector in a street has a question («بيت أبو علي؟»), not a map: the answer carries the same
+     * balance his own screen will show, so the two can never disagree.
+     */
+    suspend fun search(token: String, query: String): ApiCall<List<SearchHit>> {
+        val url = "$baseUrl/api/v1/search?q=" + URLEncoder.encode(query, "UTF-8")
+
+        return call(Request.Builder().url(url).authorized(token).build()) { parseSearch(it) }
+    }
 
     /** One house in full, with the invoices the office holds against it. */
     suspend fun house(token: String, subscriberId: Int, period: String? = null): ApiCall<House> = call(
@@ -234,7 +247,57 @@ object MotoApi {
             label = row.optString("label").takeIf { it.isNotEmpty() && it != "null" },
             lbpRate = row.optDouble("lbp_rate").takeIf { !row.isNull("lbp_rate") && !it.isNaN() },
             areas = (0 until areas.length()).map { parseArea(areas.getJSONObject(it)) },
+            stats = row.optJSONObject("stats")?.let { parseStats(it) },
         )
+    }
+
+    /** The collector's own day. Absent on a panel that has not been updated — not zeroed. */
+    private fun parseStats(row: JSONObject): CollectorStats? {
+        val today = row.optJSONObject("today") ?: return null
+        val month = row.optJSONObject("month") ?: return null
+        val handovers = row.optJSONArray("handovers")
+
+        return CollectorStats(
+            todayTotal = today.optString("total"),
+            todayCount = today.optInt("count"),
+            monthTotal = month.optString("total"),
+            monthCount = month.optInt("count"),
+            inHand = row.optString("in_hand"),
+            handedTotal = row.optString("handed_total"),
+            handovers = if (handovers == null) {
+                emptyList()
+            } else {
+                (0 until handovers.length()).map { index ->
+                    val line = handovers.getJSONObject(index)
+                    Handover(
+                        date = line.optString("date").takeIf { it.isNotEmpty() && it != "null" },
+                        amount = line.optString("amount"),
+                        note = line.optString("note").takeIf { it.isNotEmpty() && it != "null" },
+                    )
+                }
+            },
+        )
+    }
+
+    fun parseSearch(body: String): List<SearchHit>? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val results = row.optJSONArray("results") ?: return null
+
+        return (0 until results.length()).map { index ->
+            val hit = results.getJSONObject(index)
+
+            SearchHit(
+                id = hit.optInt("id"),
+                name = hit.optString("name"),
+                meterNo = hit.optString("meter_no").takeIf { it.isNotEmpty() && it != "null" },
+                type = hit.optString("type"),
+                status = hit.optString("status"),
+                route = hit.optString("route").takeIf { it.isNotEmpty() && it != "null" },
+                balance = hit.optString("balance"),
+                credit = hit.optString("credit"),
+                owes = hit.optBoolean("owes"),
+            )
+        }
     }
 
     private fun parseArea(row: JSONObject): MotoArea = MotoArea(
