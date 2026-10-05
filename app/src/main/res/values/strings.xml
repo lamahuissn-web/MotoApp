@@ -196,6 +196,7 @@
     <string name="search_placeholder">ابحث عن أي مشترك — بالاسم أو رقم العدّاد أو الهاتف</string>
     <string name="search_results">النتائج</string>
     <string name="search_empty">لا نتائج بهذا الاسم أو الرقم.</string>
+    <string name="search_clear">مسح البحث</string>
     <plurals name="payments_count">
         <item quantity="one">دفعة واحدة</item>
         <item quantity="two">دفعتان</item>

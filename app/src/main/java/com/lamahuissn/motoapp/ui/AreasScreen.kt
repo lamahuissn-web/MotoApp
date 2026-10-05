@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,10 +20,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ElectricMeter
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Payments
@@ -39,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
@@ -87,8 +92,22 @@ fun AreasScreen(
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var focused by remember { mutableStateOf(false) }
 
     val searching = query.trim().length >= 2
+
+    // While the field is live, the day's cards step aside: the keyboard takes half the screen, and a
+    // collector who has just typed a household's name needs the ANSWERS under his hand, not a screenful
+    // of totals he has to scroll past with the keyboard still open.
+    val searchMode = focused || query.isNotEmpty()
+
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(searchMode) {
+        if (searchMode) {
+            listState.scrollToItem(0)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -97,6 +116,9 @@ fun AreasScreen(
             // Edge-to-edge is on: without this the brand bar renders under the phone's own status bar,
             // which is where the owner saw the battery and the clock sitting on top of the header.
             .statusBarsPadding()
+            // …and the same for the keyboard: the screen gives up exactly the room the keyboard takes,
+            // so the field and its answers are never under it.
+            .imePadding()
             .navigationBarsPadding(),
     ) {
         AppBar(
@@ -121,25 +143,37 @@ fun AreasScreen(
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
+                    state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    item { Greeting(userName = userName, period = board.label) }
+                    if (!searchMode) {
+                        item { Greeting(userName = userName, period = board.label) }
 
-                    // The web dashboard's first row: what he took today and what he has taken this
-                    // month — the collector's own money, summed by the office, never by the phone.
-                    board.stats?.let { stats ->
-                        item { MoneyRow(stats) }
-                    }
+                        // The web dashboard's first row: what he took today and what he has taken this
+                        // month — the collector's own money, summed by the office, never by the phone.
+                        board.stats?.let { stats ->
+                            item { MoneyRow(stats) }
+                        }
 
-                    item { ShiftCounts(board) }
+                        item { ShiftCounts(board) }
 
-                    board.stats?.let { stats ->
-                        item { CashInHand(stats) }
+                        board.stats?.let { stats ->
+                            item { CashInHand(stats) }
+                        }
                     }
 
                     item {
-                        SearchField(query = query, onChange = { query = it; onSearch(it) })
+                        SearchField(
+                            query = query,
+                            onChange = { query = it; onSearch(it) },
+                            onFocus = { focused = it },
+                            onClear = {
+                                query = ""
+                                focused = false
+                                onSearch("")
+                            },
+                        )
                     }
 
                     if (searching) {
@@ -200,7 +234,7 @@ fun AreasScreen(
                         }
                     }
 
-                    if (problem != null) {
+                    if (problem != null && !searchMode) {
                         item {
                             ProblemCard(
                                 title = stringResource(R.string.areas_failed_title),
@@ -586,7 +620,12 @@ private fun CashInHand(stats: CollectorStats) {
 
 /** The panel's search field: a bordered box with a magnifier and the collector's own question in it. */
 @Composable
-private fun SearchField(query: String, onChange: (String) -> Unit) {
+private fun SearchField(
+    query: String,
+    onChange: (String) -> Unit,
+    onFocus: (Boolean) -> Unit,
+    onClear: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -617,7 +656,9 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
             ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .onFocusChanged { onFocus(it.isFocused) },
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
@@ -633,6 +674,26 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
                 }
             },
         )
+
+        // One tap back to the day: with the keyboard open this is the only way out that does not need
+        // a second hand, and a collector in a street has one hand.
+        if (query.isNotEmpty()) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable { onClear() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.search_clear),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
     }
 }
 
