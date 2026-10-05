@@ -16,6 +16,7 @@ import com.lamahuissn.motoapp.data.House
 import com.lamahuissn.motoapp.data.ManagerBoard
 import com.lamahuissn.motoapp.data.MotoApi
 import com.lamahuissn.motoapp.data.MotoArea
+import com.lamahuissn.motoapp.data.OfflineCache
 import com.lamahuissn.motoapp.data.QueueDecision
 import com.lamahuissn.motoapp.data.QueueState
 import com.lamahuissn.motoapp.data.QueuedWrite
@@ -253,12 +254,19 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun signOut() {
         val token = _session.value?.token
+        val me = _session.value?.user?.id
 
         vault.clear()
         _session.value = null
         boardCache = null
         sheetCache.clear()
         houseCache.clear()
+
+        // The office's figures do not outlive the session that read them — a phone two collectors share
+        // must not show one man's balances to the next. The QUEUE is not cleared: that is his work, and
+        // it waits for his own session to send it.
+        me?.let { offline.clear(it) }
+        _staleAsOf.value = null
         _board.value = Load.Idle
         _sheet.value = Load.Idle
         _house.value = Load.Idle
@@ -365,6 +373,16 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      */
     private var houseOrigin: Screen? = null
 
+    /** The phone's copy of the office's last answer, so the app OPENS with no network at all. */
+    private val offline = OfflineCache(application)
+
+    /**
+     * When the figures on screen came from the phone's own copy instead of the office — null while they
+     * are live. The screens say so: an old balance must never pass for a fresh one.
+     */
+    private val _staleAsOf = MutableStateFlow<String?>(null)
+    val staleAsOf: StateFlow<String?> = _staleAsOf.asStateFlow()
+
     /** Open a household the manager picked from the board — there is no area sheet behind it. */
     fun openHouseById(id: Int) {
         houseOrigin = Screen.Manager
@@ -376,6 +394,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadAreas() {
         val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
 
         // Whatever the office answered last is on screen at once; the fresh answer replaces it when it
         // arrives. A spinner only ever appears over a screen this session has never read.
@@ -383,17 +402,32 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         _problem.value = null
 
         viewModelScope.launch {
-            when (val call = MotoApi.areas(token)) {
+            when (val call = MotoApi.areas(token, sink = { offline.put(me, OfflineCache.BOARD, it) })) {
                 is ApiCall.Success -> {
                     boardCache = call.value
+                    _staleAsOf.value = null
                     _board.value = Load.Ready(call.value)
                     _lbpRate.value = call.value.lbpRate
+
+                    // The network just worked: anything the office still owes an answer for goes out now.
+                    flush()
                 }
 
                 else -> {
                     _problem.value = problem(call)
+
                     if (boardCache == null) {
-                        _board.value = Load.Failed(_problem.value?.message)
+                        // No answer now, and nothing read in this session: the phone's own copy is the only
+                        // way in, and it says how old it is.
+                        val stored = offline.body(me, OfflineCache.BOARD)?.let { MotoApi.parseBoard(it) }
+
+                        if (stored != null) {
+                            _staleAsOf.value = offline.storedAt(me, OfflineCache.BOARD)
+                            _board.value = Load.Ready(stored)
+                            _lbpRate.value = stored.lbpRate
+                        } else {
+                            _board.value = Load.Failed(_problem.value?.message)
+                        }
                     }
                 }
             }
@@ -410,22 +444,32 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     fun loadSheet(routeId: Int? = null) {
         val id = routeId ?: (screen.value as? Screen.Houses)?.areaId ?: return
         val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
 
         sheetCache[id]?.let { _sheet.value = Load.Ready(it) } ?: run { _sheet.value = Load.Busy }
         _problem.value = null
 
         viewModelScope.launch {
-            when (val call = MotoApi.houses(token, id)) {
+            when (val call = MotoApi.houses(token, id, sink = { offline.put(me, OfflineCache.sheet(id), it) })) {
                 is ApiCall.Success -> {
                     sheetCache[id] = call.value
+                    _staleAsOf.value = null
                     _sheet.value = Load.Ready(call.value)
                     call.value.lbpRate?.let { _lbpRate.value = it }
                 }
 
                 else -> {
                     _problem.value = problem(call)
+
                     if (sheetCache[id] == null) {
-                        _sheet.value = Load.Failed(_problem.value?.message)
+                        val stored = offline.body(me, OfflineCache.sheet(id))?.let { MotoApi.parseSheet(it) }
+
+                        if (stored != null) {
+                            _staleAsOf.value = offline.storedAt(me, OfflineCache.sheet(id))
+                            _sheet.value = Load.Ready(stored)
+                        } else {
+                            _sheet.value = Load.Failed(_problem.value?.message)
+                        }
                     }
                 }
             }
@@ -490,21 +534,31 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     fun loadHouse(houseId: Int? = null) {
         val id = houseId ?: (screen.value as? Screen.House)?.houseId ?: return
         val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
 
         houseCache[id]?.let { _house.value = Load.Ready(it) } ?: run { _house.value = Load.Busy }
         _problem.value = null
 
         viewModelScope.launch {
-            when (val call = MotoApi.house(token, id)) {
+            when (val call = MotoApi.house(token, id, sink = { offline.put(me, OfflineCache.house(id), it) })) {
                 is ApiCall.Success -> {
                     houseCache[id] = call.value
+                    _staleAsOf.value = null
                     _house.value = Load.Ready(call.value)
                 }
 
                 else -> {
                     _problem.value = problem(call)
+
                     if (houseCache[id] == null) {
-                        _house.value = Load.Failed(_problem.value?.message)
+                        val stored = offline.body(me, OfflineCache.house(id))?.let { MotoApi.parseHouseBody(it) }
+
+                        if (stored != null) {
+                            _staleAsOf.value = offline.storedAt(me, OfflineCache.house(id))
+                            _house.value = Load.Ready(stored)
+                        } else {
+                            _house.value = Load.Failed(_problem.value?.message)
+                        }
                     }
                 }
             }

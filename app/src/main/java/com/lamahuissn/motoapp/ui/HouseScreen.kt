@@ -91,6 +91,7 @@ fun HouseScreen(
     onCollect: (amount: String, currency: String, rate: String?, note: String?) -> Unit,
     onRetryWrite: () -> Unit,
     onDismissOutcome: () -> Unit,
+    staleAsOf: String? = null,
 ) {
     val house = (load as? Load.Ready)?.value
     val context = LocalContext.current
@@ -153,6 +154,15 @@ fun HouseScreen(
         }
 
         HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+        // The house as the phone last read it: the collector can still take the reading and the money
+        // with no signal, and the screen says the figures are the office's last answer, not a fresh one.
+        if (staleAsOf != null) {
+            StaleNote(
+                asOf = staleAsOf,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            )
+        }
 
         when (load) {
             Load.Idle, Load.Busy -> BusyBox()

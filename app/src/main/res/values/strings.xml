@@ -30,6 +30,7 @@
         <item quantity="many">%1$d سجلًا لم يؤكّدها المكتب بعد</item>
         <item quantity="other">%1$d سجل لم يؤكّده المكتب بعد</item>
     </plurals>
+    <string name="stale_note">نسخة محفوظة في هاتفك — آخر تحديث %1$s. لا شبكة الآن، والأرقام من آخر مرة وصل فيها المكتب.</string>
     <string name="queue_subtitle">الطابور</string>
     <string name="queue_title">ما لم يصل المكتب بعد</string>
     <string name="queue_all_settled">كل ما سجّلته وصل المكتب ✓</string>

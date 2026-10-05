@@ -60,6 +60,7 @@ private fun MotoApp(model: MotoViewModel) {
     val session by model.session.collectAsState()
     val busy by model.busy.collectAsState()
     val problem by model.problem.collectAsState()
+    val staleAsOf by model.staleAsOf.collectAsState()
 
     // The phone's own back button walks the same journey the arrows do. On a home screen it stays
     // disabled, so the system ends the app the way the user expects instead of us swallowing the press.
@@ -95,6 +96,7 @@ private fun MotoApp(model: MotoViewModel) {
                 onOpen = model::openArea,
                 queue = queue,
                 onOpenQueue = model::openQueue,
+                staleAsOf = staleAsOf,
                 onBack = if (session?.user?.isAdmin == true) model::backFromAreas else null,
             )
         }
@@ -122,6 +124,7 @@ private fun MotoApp(model: MotoViewModel) {
                 onBack = model::backToAreas,
                 onRetry = { model.loadSheet(current.areaId) },
                 onOpenHouse = model::openHouse,
+                staleAsOf = staleAsOf,
             )
         }
 
@@ -142,6 +145,7 @@ private fun MotoApp(model: MotoViewModel) {
                 onCollect = model::submitCollection,
                 onRetryWrite = model::retryPending,
                 onDismissOutcome = model::clearOutcome,
+                staleAsOf = staleAsOf,
             )
         }
 

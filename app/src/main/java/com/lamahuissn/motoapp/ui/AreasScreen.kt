@@ -92,6 +92,7 @@ fun AreasScreen(
     onOpen: (MotoArea) -> Unit,
     queue: List<QueuedWrite> = emptyList(),
     onOpenQueue: () -> Unit = {},
+    staleAsOf: String? = null,
     onBack: (() -> Unit)? = null,
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
@@ -137,10 +138,25 @@ fun AreasScreen(
             onBack = onBack,
         )
 
+        // Reading the phone's own copy rather than the office's answer: say so, and say how old it is.
+        if (staleAsOf != null) {
+            StaleNote(
+                asOf = staleAsOf,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            )
+        }
+
         when (load) {
             Load.Idle, Load.Busy -> BusyBox()
 
             is Load.Failed -> Column(Modifier.padding(16.dp)) {
+                // Nothing to show for the day, but a record may still be owed: the queue has to be
+                // reachable exactly when the app looks most broken.
+                if (owed.isNotEmpty()) {
+                    QueueCard(owed = owed.size, onOpen = onOpenQueue)
+                    Spacer(Modifier.height(10.dp))
+                }
+
                 ProblemCard(
                     title = stringResource(R.string.areas_failed_title),
                     message = problem?.message ?: load.message,

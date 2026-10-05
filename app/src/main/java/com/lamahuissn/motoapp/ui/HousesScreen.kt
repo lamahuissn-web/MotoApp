@@ -54,6 +54,7 @@ fun HousesScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onOpenHouse: (House) -> Unit,
+    staleAsOf: String? = null,
 ) {
     val sheet = (load as? Load.Ready)?.value
 
@@ -133,6 +134,14 @@ fun HousesScreen(
         }
 
         HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+        // The phone's own copy of the sheet, so the collector can still walk his street with no signal.
+        if (staleAsOf != null) {
+            StaleNote(
+                asOf = staleAsOf,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            )
+        }
 
         when (load) {
             Load.Idle, Load.Busy -> BusyBox()

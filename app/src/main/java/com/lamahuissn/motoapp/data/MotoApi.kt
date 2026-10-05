@@ -86,9 +86,13 @@ object MotoApi {
     ) { true }
 
     /** The areas, and what each one owes and has left to read. */
-    suspend fun areas(token: String, period: String? = null): ApiCall<AreasBoard> = call(
+    suspend fun areas(token: String, period: String? = null, sink: ((String) -> Unit)? = null): ApiCall<AreasBoard> = call(
         Request.Builder().url("$baseUrl/api/v1/areas${periodQuery(period)}").authorized(token).build(),
-    ) { parseBoard(it) }
+    ) { body ->
+        // The office's OWN answer, as it arrived, is what the phone keeps for a day without signal.
+        sink?.invoke(body)
+        parseBoard(body)
+    }
 
     /**
      * One area's houses.
@@ -96,9 +100,12 @@ object MotoApi {
      * This is the sheet the collector walks with: what each house owes, which months the figure is
      * made of, and whether the meter was read this cycle.
      */
-    suspend fun houses(token: String, routeId: Int, period: String? = null): ApiCall<AreaSheet> = call(
+    suspend fun houses(token: String, routeId: Int, period: String? = null, sink: ((String) -> Unit)? = null): ApiCall<AreaSheet> = call(
         Request.Builder().url("$baseUrl/api/v1/areas/$routeId/houses${periodQuery(period)}").authorized(token).build(),
-    ) { parseSheet(it) }
+    ) { body ->
+        sink?.invoke(body)
+        parseSheet(body)
+    }
 
     /**
      * One household, from anywhere in the network.
@@ -120,9 +127,12 @@ object MotoApi {
     ) { parseManagerBoard(it) }
 
     /** One house in full, with the invoices the office holds against it. */
-    suspend fun house(token: String, subscriberId: Int, period: String? = null): ApiCall<House> = call(
+    suspend fun house(token: String, subscriberId: Int, period: String? = null, sink: ((String) -> Unit)? = null): ApiCall<House> = call(
         Request.Builder().url("$baseUrl/api/v1/houses/$subscriberId${periodQuery(period)}").authorized(token).build(),
-    ) { body -> runCatching { JSONObject(body).getJSONObject("house") }.getOrNull()?.let { parseHouse(it) } }
+    ) { body ->
+        sink?.invoke(body)
+        parseHouseBody(body)
+    }
 
     /**
      * A meter reading, taken at the door.
@@ -364,6 +374,10 @@ object MotoApi {
             },
         )
     }
+
+    /** One household's body as the API sends it — read back through the same parser as the live answer. */
+    fun parseHouseBody(body: String): House? =
+        runCatching { JSONObject(body).getJSONObject("house") }.getOrNull()?.let { parseHouse(it) }
 
     private fun parseArea(row: JSONObject): MotoArea = MotoArea(
         id = if (row.isNull("id")) null else row.optInt("id"),

@@ -270,12 +270,7 @@ private fun QueueRow(
 }
 
 /** `2026-10-05T18:25:11` as «اليوم 18:25» or «2026-10-04 18:25» — enough to place it in a day. */
-private fun clock(createdAt: String): String {
-    val day = createdAt.take(10)
-    val time = createdAt.drop(11).take(5)
-
-    return if (day == LocalDate.now().toString()) "اليوم $time" else "$day $time"
-}
+private fun clock(createdAt: String): String = clockText(createdAt)
 
 /** The receipt as words, handed to the household's own phone — the same way the house screen does it. */
 private fun shareReceipt(context: Context, receipt: String) {

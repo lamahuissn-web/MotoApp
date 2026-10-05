@@ -640,6 +640,30 @@ fun MotoAppBar(
     }
 }
 
+/**
+ * «نسخة محفوظة» — worn wherever a screen is showing the phone's own copy instead of the office's answer.
+ *
+ * The phone keeps the last answer so the app OPENS without a network at all (spec 010). That trade is
+ * only honest if the screen says so: an old balance must never pass for a fresh one, because the office's
+ * own figure is what the desk will charge from.
+ */
+@Composable
+fun StaleNote(asOf: String, modifier: Modifier = Modifier) {
+    Alert(
+        text = stringResource(R.string.stale_note, clockText(asOf)),
+        tone = Tone.Warning,
+        modifier = modifier,
+    )
+}
+
+/** `2026-10-05T18:25:11` as «اليوم 18:25» or «2026-10-04 18:25» — enough to place a copy in a day. */
+fun clockText(stamp: String): String {
+    val day = stamp.take(10)
+    val time = stamp.drop(11).take(5)
+
+    return if (day == java.time.LocalDate.now().toString()) "اليوم $time" else "$day $time"
+}
+
 @Composable
 fun BusyBox(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
