@@ -19,6 +19,7 @@ import com.lamahuissn.motoapp.ui.HousesScreen
 import com.lamahuissn.motoapp.ui.LoginScreen
 import com.lamahuissn.motoapp.ui.ManagerScreen
 import com.lamahuissn.motoapp.ui.MotoViewModel
+import com.lamahuissn.motoapp.ui.QueueScreen
 import com.lamahuissn.motoapp.ui.Screen
 import com.lamahuissn.motoapp.ui.theme.MotoAppTheme
 
@@ -63,7 +64,7 @@ private fun MotoApp(model: MotoViewModel) {
     // The phone's own back button walks the same journey the arrows do. On a home screen it stays
     // disabled, so the system ends the app the way the user expects instead of us swallowing the press.
     val canGoBack = when (screen) {
-        is Screen.House, is Screen.Houses -> true
+        is Screen.House, is Screen.Houses, Screen.Queue -> true
         Screen.Areas -> session?.user?.isAdmin == true
         else -> false
     }
@@ -80,6 +81,7 @@ private fun MotoApp(model: MotoViewModel) {
         Screen.Areas -> {
             val board by model.board.collectAsState()
             val search by model.search.collectAsState()
+            val queue by model.queue.collectAsState()
 
             AreasScreen(
                 userName = session?.user?.name.orEmpty(),
@@ -91,7 +93,22 @@ private fun MotoApp(model: MotoViewModel) {
                 onRefresh = model::loadAreas,
                 onSignOut = model::signOut,
                 onOpen = model::openArea,
+                queue = queue,
+                onOpenQueue = model::openQueue,
                 onBack = if (session?.user?.isAdmin == true) model::backFromAreas else null,
+            )
+        }
+
+        Screen.Queue -> {
+            val queue by model.queue.collectAsState()
+
+            QueueScreen(
+                records = queue,
+                busy = busy,
+                onSend = model::flush,
+                onDiscard = model::discard,
+                onBack = model::backFromQueue,
+                onSignOut = model::signOut,
             )
         }
 

@@ -14,6 +14,42 @@
     <string name="brand_mark_description">شعار التطبيق</string>
     <string name="server_label">عنوان الخادم</string>
     <string name="back">رجوع</string>
+    <plurals name="queue_owed">
+        <item quantity="zero">لا سجلات بانتظار الشبكة</item>
+        <item quantity="one">سجل واحد بانتظار الشبكة</item>
+        <item quantity="two">سجلان بانتظار الشبكة</item>
+        <item quantity="few">%1$d سجلات بانتظار الشبكة</item>
+        <item quantity="many">%1$d سجلًا بانتظار الشبكة</item>
+        <item quantity="other">%1$d سجل بانتظار الشبكة</item>
+    </plurals>
+    <plurals name="queue_card_hint">
+        <item quantity="zero">لا شيء معلّق</item>
+        <item quantity="one">سجل واحد لم يؤكّده المكتب بعد</item>
+        <item quantity="two">سجلان لم يؤكّدهما المكتب بعد</item>
+        <item quantity="few">%1$d سجلات لم يؤكّدها المكتب بعد</item>
+        <item quantity="many">%1$d سجلًا لم يؤكّدها المكتب بعد</item>
+        <item quantity="other">%1$d سجل لم يؤكّده المكتب بعد</item>
+    </plurals>
+    <string name="queue_subtitle">الطابور</string>
+    <string name="queue_title">ما لم يصل المكتب بعد</string>
+    <string name="queue_all_settled">كل ما سجّلته وصل المكتب ✓</string>
+    <string name="queue_send_now">أرسل الآن</string>
+    <string name="queue_empty">لا سجلات في الطابور.</string>
+    <string name="queue_settled_hint">%1$d سجل منتهٍ (تمّت أو أُلغي) محفوظ هنا للعلم.</string>
+    <string name="queue_state_recorded">لم يُرسَل بعد</string>
+    <string name="queue_state_waiting">لم يصل الردّ</string>
+    <string name="queue_state_done">تمّت</string>
+    <string name="queue_state_reconciliation">راجعها المكتب</string>
+    <string name="queue_state_discarded">أُلغي</string>
+    <string name="queue_line_collection">قبض %1$s</string>
+    <string name="queue_line_reading">قراءة %1$s</string>
+    <string name="queue_price_hint">تاريخ العمل %1$s</string>
+    <string name="queue_period_hint">فترة %1$s</string>
+    <string name="queue_discard">تجاهل</string>
+    <string name="queue_discard_title">تجاهل هذا السجل؟</string>
+    <string name="queue_discard_text">%1$s —%2$s\nسيُلغى السجل ولن يُقيَّد في المكتب، ولا يمكن التراجع عنه.</string>
+    <string name="queue_discard_confirm">تجاهل</string>
+    <string name="queue_card_title">بانتظار الشبكة</string>
     <string name="cancel">إلغاء</string>
     <string name="refresh">تحديث</string>
 
@@ -99,7 +135,8 @@
     <string name="outcome_reading_title">سُجّلت القراءة</string>
     <string name="outcome_collection_title">سُجّل القبض</string>
     <string name="outcome_refused_title">رفض الخادم الطلب</string>
-    <string name="outcome_unknown_title">لم تصل النتيجة</string>
+    <string name="outcome_queued_title">سُجّلت — بانتظار الشبكة</string>
+    <string name="outcome_queued_hint">السجل في هاتفك ولن يضيع؛ يُرسَل بنفس المفتاح عند رجوع الشبكة.</string>
     <string name="outcome_refused_hint">الخادم رفض الطلب — السبب أدناه. لا شيء سُجِّل.</string>
     <string name="outcome_unknown_hint">لم يصل الجواب — أعِد الإرسال بالمفتاح نفسه؛ لا تُنشئ محاولة جديدة.</string>
     <string name="outcome_problem_title">سبب الرفض</string>

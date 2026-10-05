@@ -1,6 +1,8 @@
 package com.lamahuissn.motoapp.ui
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,10 +16,14 @@ import com.lamahuissn.motoapp.data.House
 import com.lamahuissn.motoapp.data.ManagerBoard
 import com.lamahuissn.motoapp.data.MotoApi
 import com.lamahuissn.motoapp.data.MotoArea
+import com.lamahuissn.motoapp.data.QueueDecision
+import com.lamahuissn.motoapp.data.QueueState
+import com.lamahuissn.motoapp.data.QueuedWrite
 import com.lamahuissn.motoapp.data.ReadingAnswer
 import com.lamahuissn.motoapp.data.SearchHit
 import com.lamahuissn.motoapp.data.Session
 import com.lamahuissn.motoapp.data.TokenVault
+import com.lamahuissn.motoapp.data.WriteQueueStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 /** Where the collector is. */
 sealed interface Screen {
@@ -32,6 +39,8 @@ sealed interface Screen {
     data object Areas : Screen
     /** The manager's board — the home of a manager's session (spec 009). */
     data object Manager : Screen
+    /** The writes the office has not seen yet (spec 010). */
+    data object Queue : Screen
     data class Houses(val areaId: Int, val areaName: String) : Screen
     data class House(val areaId: Int, val areaName: String, val houseId: Int) : Screen
 }
@@ -64,13 +73,16 @@ data class Outcome(
  * One holder rather than a view-model per screen, because these screens are one journey through one
  * session: the token, the area, the sheet, the house and the busy flag all change together.
  *
- * The two rules of the money are enforced here rather than in a dialog:
+ * The rules of the money are enforced here rather than in a dialog:
  *
  *  - **One attempt, one key.** A key is made when the collector confirms, kept while the answer is
  *    unknown, and reused for every retry of that attempt — never regenerated, because a regenerated key
  *    is a second receipt for money handed over once.
  *  - **A refusal is an answer.** When the server refuses (`refuse.period_not_invoiced`, `refuse.
- *    reading_lower`), the attempt is over: the key is dropped and the office's own sentence is shown.
+ *    reading_lower`), the attempt is over: the office's own sentence is shown and kept on the row, and
+ *    the row never retries itself.
+ *  - **A write is on disk before it is sent** (spec 010). The queue is the collector's work, not a
+ *    variable: a phone that dies in a basement must not take a collection with it.
  */
 class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -130,8 +142,23 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     private val _manager = MutableStateFlow<Load<ManagerBoard>>(Load.Idle)
     val manager: StateFlow<Load<ManagerBoard>> = _manager.asStateFlow()
 
-    /** The attempt whose answer is not known yet, kept across retries (see this class's docblock). */
-    private var pending: Attempt? = null
+    /**
+     * The writes the office has not seen yet (spec 010) — on disk before they are sent.
+     *
+     * The file is the record and the single source of truth: every change is a read-modify-write of it,
+     * and the flow below is only the current collector's VIEW of it. A collection the collector is
+     * holding cash for must never exist only in a variable that a killed app takes with it.
+     */
+    private val queueStore = WriteQueueStore(application)
+
+    private val _queue = MutableStateFlow(queueStore.load().filter { it.userId == _session.value?.user?.id })
+    val queue: StateFlow<List<QueuedWrite>> = _queue.asStateFlow()
+
+    /** One flush at a time: two walks at once would both offer the same row to the server. */
+    private var flushing = false
+
+    /** Where the queue was opened from, so its back returns there. */
+    private var queueOrigin: Screen? = null
 
     /**
      * What the last successful read answered, kept in MEMORY only, for as long as this session lives.
@@ -157,6 +184,30 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
             Screen.Manager -> loadManager()
             else -> Unit
         }
+
+        // Anything the last session left owed goes out as soon as the app opens, and again whenever the
+        // phone finds a network. The collector should never have to remember to press a button for it.
+        flush()
+        watchNetwork()
+    }
+
+    /**
+     * The phone's own idea of «the network is back».
+     *
+     * Without this the queue only drains when a screen is opened, which is the behaviour that left the
+     * collector sitting on one page waiting for a bar of signal. `ACCESS_NETWORK_STATE` is already in
+     * the manifest; a phone that refuses the registration still flushes on every screen he opens.
+     */
+    private fun watchNetwork() {
+        val manager = getApplication<Application>().getSystemService(ConnectivityManager::class.java) ?: return
+
+        runCatching {
+            manager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    flush()
+                }
+            })
+        }
     }
 
     /** Where a session's holder belongs: a manager reads his board, a collector walks his areas. */
@@ -181,11 +232,15 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                     _session.value = call.value
                     _screen.value = homeFor(call.value)
                     _busy.value = false
+                    refreshQueue()
 
                     when (_screen.value) {
                         Screen.Manager -> loadManager()
                         else -> loadAreas()
                     }
+
+                    // Whatever this collector left owed on this phone goes out now that he is signed in.
+                    flush()
                 }
 
                 else -> {
@@ -211,7 +266,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         _search.value = Load.Idle
         _problem.value = null
         _outcome.value = null
-        pending = null
+        refreshQueue()
         _screen.value = Screen.Login
 
         if (token != null) {
@@ -283,6 +338,11 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
         is Screen.Houses -> {
             backToAreas()
+            true
+        }
+
+        Screen.Queue -> {
+            backFromQueue()
             true
         }
 
@@ -488,156 +548,303 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     /* ------------------------------------------------------------ the two writes */
 
-    /** A meter reading, taken at the door. */
+    /**
+     * A meter reading, taken at the door.
+     *
+     * Recorded on disk first (spec 010), then sent. Pressing the same reading twice while the first is
+     * still unanswered is the same attempt — it keeps the key it already has, because a fresh key is a
+     * second bill for one month's meter.
+     */
     fun submitReading(currentReading: String, note: String?, estimated: Boolean, estimatedKwh: String, reason: String?) {
         val house = (_house.value as? Load.Ready)?.value ?: return
-        val token = _session.value?.token ?: return
-        val app = getApplication<Application>()
+        val me = _session.value?.user?.id ?: return
 
-        // The same payload keeps the key it already had: a retry is the SAME attempt, and a fresh key
-        // would be a second invoice for one month's meter.
-        val signature = "reading|${house.id}|$currentReading|${note.orEmpty()}|${if (estimated) estimatedKwh else ""}|${reason.orEmpty()}"
-        val key = pending?.takeIf { it.houseId == house.id && it.payload == signature }?.key ?: AttemptKey.next()
-
-        val attempt = Attempt.Reading(
-            key = key,
+        val candidate = QueuedWrite(
+            kind = QueuedWrite.Kind.Reading,
+            key = AttemptKey.next(),
+            userId = me,
             houseId = house.id,
+            houseName = house.name,
+            createdAt = LocalDateTime.now().toString(),
             period = period(),
             currentReading = currentReading,
-            note = note,
             estimatedKwh = if (estimated) estimatedKwh else null,
             reason = reason,
-            payload = signature,
+            note = note,
         )
 
-        pending = attempt
-        _busy.value = true
-        _outcome.value = null
-
-        viewModelScope.launch {
-            val call = if (estimated) {
-                MotoApi.estimate(token, house.id, attempt.period, estimatedKwh, reason.orEmpty(), attempt.key)
-            } else {
-                MotoApi.read(token, house.id, attempt.period, currentReading, note, attempt.key)
-            }
-
-            _busy.value = false
-
-            when (call) {
-                is ApiCall.Success -> {
-                    pending = null
-                    _outcome.value = readingOutcome(call.value)
-                    refreshAfterWrite(house.id)
-                }
-
-                is ApiCall.Refused -> {
-                    // The server answered: this attempt is over, key and all.
-                    pending = null
-                    _outcome.value = Outcome(
-                        kind = OutcomeKind.Refused,
-                        title = app.getString(R.string.outcome_refused_title),
-                        facts = listOf(app.getString(R.string.outcome_refused_hint) to ""),
-                        problem = problem(call),
-                    )
-                }
-
-                else -> {
-                    // Unknown: the key stays, and the collector is offered the SAME attempt again.
-                    _outcome.value = Outcome(
-                        kind = OutcomeKind.Unknown,
-                        title = app.getString(R.string.outcome_unknown_title),
-                        facts = listOf(app.getString(R.string.outcome_unknown_hint) to ""),
-                        problem = problem(call),
-                        retryable = true,
-                    )
-                }
-            }
-        }
+        walk(listOf(owedDuplicate(me, candidate) ?: candidate), report = true)
     }
 
     /** Money taken at the door, in one currency. */
     fun submitCollection(amount: String, currency: String, rate: String?, note: String?) {
         val house = (_house.value as? Load.Ready)?.value ?: return
-        val token = _session.value?.token ?: return
-        val app = getApplication<Application>()
+        val me = _session.value?.user?.id ?: return
 
-        val attempt = Attempt.Collection(
+        val candidate = QueuedWrite(
+            kind = QueuedWrite.Kind.Collection,
             key = AttemptKey.next(),
+            userId = me,
             houseId = house.id,
+            houseName = house.name,
+            createdAt = LocalDateTime.now().toString(),
+            // The day the money was TAKEN, written down now: a payment collected at eleven at night and
+            // sent in the morning still belongs to the night it was collected.
+            collectedOn = LocalDate.now().toString(),
             amount = amount,
             currency = currency,
             rate = rate,
             note = note,
-            payload = "$amount|$currency|${rate.orEmpty()}",
         )
 
-        pending = attempt
-        _busy.value = true
-        _outcome.value = null
+        walk(listOf(owedDuplicate(me, candidate) ?: candidate), report = true)
+    }
+
+    /**
+     * «أعد المحاولة» on a write whose answer never arrived.
+     *
+     * Sends this house's owed rows again with the keys they already have — never a fresh attempt — and
+     * reports what the office says this time.
+     */
+    fun retryPending() {
+        val me = _session.value?.user?.id ?: return
+        val houseId = (_screen.value as? Screen.House)?.houseId
+        val owed = QueueDecision.openEntries(QueueDecision.forUser(_queue.value, me))
+            .filter { houseId == null || it.houseId == houseId }
+
+        if (owed.isEmpty()) flush() else walk(owed, report = true)
+    }
+
+    /* --------------------------------------------------------------- the queue */
+
+    /**
+     * Send these rows, oldest first, and write down what the office said about each.
+     *
+     * `report` is for a write the collector is watching: he gets the office's own answer on screen. The
+     * queue's own flush reports nothing — a queued row going out is not news.
+     *
+     * The walk stops at the first row the network did not answer: ten failures in a row are one fact.
+     */
+    private fun walk(entries: List<QueuedWrite>, report: Boolean) {
+        val token = _session.value?.token ?: return
+        if (entries.isEmpty()) return
 
         viewModelScope.launch {
-            val call = MotoApi.collect(
-                token = token,
-                subscriberId = house.id,
-                amount = amount,
-                currency = currency,
-                rate = rate,
-                method = if (currency == "lbp") "cash_lbp" else "cash_usd",
-                note = note,
-                collectedOn = LocalDate.now().toString(),
-                key = attempt.key,
-            )
+            if (report) {
+                _busy.value = true
+                _outcome.value = null
+            }
 
-            _busy.value = false
+            var last: QueuedWrite? = null
+            var lastCall: ApiCall<*>? = null
 
-            when (call) {
-                is ApiCall.Success -> {
-                    pending = null
-                    _outcome.value = collectionOutcome(call.value)
-                    refreshAfterWrite(house.id)
+            for (entry in entries) {
+                // On disk FIRST, before the request leaves the phone (spec 010's first invariant): a
+                // phone killed mid-request must still know the collector took this reading or this cash.
+                update(entry)
+
+                val call = send(entry, token)
+                val settled = settle(entry, call)
+
+                update(settled)
+                last = settled
+                lastCall = call
+
+                if (!QueueDecision.continueAfter(settled)) break
+            }
+
+            if (report) {
+                _busy.value = false
+                _outcome.value = outcome(last, lastCall)
+            }
+
+            // A write the office applied makes the house a different house: re-read it so the door shows
+            // the office's own figures rather than what the collector saw before he paid.
+            last?.takeIf { it.state == QueueState.Done }?.let { refreshAfterWrite(it.houseId) }
+        }
+    }
+
+    /**
+     * Send everything the office still owes an answer for — the queue draining itself.
+     *
+     * Runs when the app opens, when the phone finds a network, by hand from the queue screen, and after a
+     * write the collector watched. It only ever sends the CURRENT collector's rows: the office attributes
+     * a receipt to the token that sent it, so another collector's rows wait for their own session.
+     */
+    fun flush() {
+        val me = _session.value?.user?.id ?: return
+        if (flushing) return
+
+        val owed = QueueDecision.openEntries(QueueDecision.forUser(_queue.value, me))
+        if (owed.isEmpty()) return
+
+        flushing = true
+
+        viewModelScope.launch {
+            try {
+                var applied = false
+
+                for (entry in owed) {
+                    val token = _session.value?.token ?: return@launch
+
+                    val settled = settle(entry, send(entry, token))
+                    update(settled)
+
+                    if (settled.state == QueueState.Done) applied = true
+                    if (!QueueDecision.continueAfter(settled)) break
                 }
 
-                is ApiCall.Refused -> {
-                    pending = null
-                    _outcome.value = Outcome(
-                        kind = OutcomeKind.Refused,
-                        title = app.getString(R.string.outcome_refused_title),
-                        facts = listOf(app.getString(R.string.outcome_refused_hint) to ""),
-                        problem = problem(call),
-                    )
-                }
-
-                else -> _outcome.value = Outcome(
-                    kind = OutcomeKind.Unknown,
-                    title = app.getString(R.string.outcome_unknown_title),
-                    facts = listOf(app.getString(R.string.outcome_unknown_hint) to ""),
-                    problem = problem(call),
-                    retryable = true,
-                )
+                if (applied) refreshAfterWrite(null)
+            } finally {
+                flushing = false
             }
         }
     }
 
-    /** Send the attempt whose answer is still unknown — with its own key, never a new one. */
-    fun retryPending() {
-        when (val attempt = pending) {
-            is Attempt.Reading -> submitReading(
-                currentReading = attempt.currentReading,
-                note = attempt.note,
-                estimated = ! attempt.estimatedKwh.isNullOrBlank(),
-                estimatedKwh = attempt.estimatedKwh.orEmpty(),
-                reason = attempt.reason,
+    /** One row as the call that carries it. The key it already has travels with it, every time. */
+    private suspend fun send(entry: QueuedWrite, token: String): ApiCall<*> = when (entry.kind) {
+        QueuedWrite.Kind.Reading -> if (entry.estimatedKwh != null) {
+            MotoApi.estimate(
+                token = token,
+                subscriberId = entry.houseId,
+                period = entry.period ?: period(),
+                kwh = entry.estimatedKwh,
+                reason = entry.reason.orEmpty(),
+                key = entry.key,
             )
-
-            is Attempt.Collection -> submitCollection(
-                amount = attempt.amount,
-                currency = attempt.currency,
-                rate = attempt.rate,
-                note = attempt.note,
+        } else {
+            MotoApi.read(
+                token = token,
+                subscriberId = entry.houseId,
+                period = entry.period ?: period(),
+                currentReading = entry.currentReading.orEmpty(),
+                note = entry.note,
+                key = entry.key,
             )
-
-            null -> Unit
         }
+
+        QueuedWrite.Kind.Collection -> MotoApi.collect(
+            token = token,
+            subscriberId = entry.houseId,
+            amount = entry.amount.orEmpty(),
+            currency = entry.currency ?: "usd",
+            rate = entry.rate,
+            method = if (entry.currency == "lbp") "cash_lbp" else "cash_usd",
+            note = entry.note,
+            collectedOn = entry.collectedOn ?: LocalDate.now().toString(),
+            key = entry.key,
+        )
+    }
+
+    /** What the office's answer means for the row it was sent for. */
+    private fun settle(entry: QueuedWrite, call: ApiCall<*>): QueuedWrite = when (call) {
+        is ApiCall.Success<*> -> QueueDecision.afterSuccess(entry, (call.value as? CollectionAnswer)?.receiptText)
+
+        is ApiCall.Refused -> when (call.answer.code) {
+            // An expired session says nothing about the money: sign in and the row goes out again with
+            // the same key. Marking it «راجعها المكتب» would bury a receipt the office never refused.
+            "unauthenticated", "account_disabled" -> {
+                _problem.value = problem(call)
+                QueueDecision.afterUnreachable(entry, call.answer.message.orEmpty())
+            }
+
+            else -> QueueDecision.afterRefusal(entry, call.answer.message)
+        }
+
+        // Answered, but not in a shape this app can read. The row stays owed and goes out again with the
+        // same key, which the office reads as the same attempt — never as a second one.
+        is ApiCall.Unreadable -> QueueDecision.afterUnreachable(entry, call.answer.message.orEmpty())
+
+        is ApiCall.Unreachable -> QueueDecision.afterUnreachable(entry, call.trouble)
+    }
+
+    /** The office's own words for a write the collector just watched. */
+    private fun outcome(entry: QueuedWrite?, call: ApiCall<*>?): Outcome? {
+        val app = getApplication<Application>()
+        if (entry == null || call == null) return null
+
+        return when {
+            entry.state == QueueState.Done && call is ApiCall.Success<*> -> when (val value = call.value) {
+                is ReadingAnswer -> readingOutcome(value)
+                is CollectionAnswer -> collectionOutcome(value)
+                else -> null
+            }
+
+            entry.state == QueueState.NeedsReconciliation -> Outcome(
+                kind = OutcomeKind.Refused,
+                title = app.getString(R.string.outcome_refused_title),
+                facts = listOf(app.getString(R.string.outcome_refused_hint) to ""),
+                problem = problem(call),
+            )
+
+            entry.state == QueueState.Done -> null
+
+            else -> Outcome(
+                kind = OutcomeKind.Unknown,
+                title = app.getString(R.string.outcome_queued_title),
+                facts = listOf(
+                    entry.houseName to if (entry.isMoney) Money.usd(entry.amount.orEmpty()) else entry.currentReading.orEmpty(),
+                    app.getString(R.string.outcome_queued_hint) to "",
+                ),
+                problem = problem(call),
+                retryable = true,
+            )
+        }
+    }
+
+    /** Where the queue is opened from, so its back returns there. */
+    fun openQueue() {
+        queueOrigin = _screen.value
+        _screen.value = Screen.Queue
+    }
+
+    fun backFromQueue() {
+        val origin = queueOrigin
+        queueOrigin = null
+
+        _screen.value = origin ?: Screen.Areas
+    }
+
+    /**
+     * Throw a row away on purpose.
+     *
+     * It does not disappear: the row stays visible as `Discarded` with the date, because money that a
+     * tap can silently remove is money nobody can audit. The confirmation on screen says so in words.
+     */
+    fun discard(entry: QueuedWrite) {
+        mutate { rows ->
+            val index = rows.indexOfFirst { it.key == entry.key }
+            if (index >= 0) rows[index] = rows[index].copy(state = QueueState.Discarded)
+        }
+    }
+
+    /* ------------------------------------------------------------------ internals */
+
+    /** The row this exact write already has while it is still owed — a second press is not a new attempt. */
+    private fun owedDuplicate(me: Int, candidate: QueuedWrite): QueuedWrite? = _queue.value
+        .firstOrNull { it.isOpen && it.userId == me && it.sameWriteAs(candidate) }
+
+    /**
+     * Every change to the queue is a read-modify-write of the ONE file.
+     *
+     * The file is the record; a second copy in memory is a second thing that can disagree with it. The
+     * flow the screens read is only the current collector's view of what came back.
+     */
+    private fun mutate(block: (MutableList<QueuedWrite>) -> Unit) {
+        val rows = queueStore.load().toMutableList()
+        block(rows)
+        queueStore.save(rows)
+        _queue.value = QueueDecision.forUser(rows, _session.value?.user?.id ?: -1)
+    }
+
+    private fun update(entry: QueuedWrite) = mutate { rows ->
+        val index = rows.indexOfFirst { it.key == entry.key }
+        if (index >= 0) rows[index] = entry else rows.add(entry)
+    }
+
+    /** Re-read the queue for whoever is signed in now. The file itself is never cleared by signing out. */
+    private fun refreshQueue() {
+        _queue.value = QueueDecision.forUser(queueStore.load(), _session.value?.user?.id ?: -1)
     }
 
     /* ------------------------------------------------------------------ internals */
@@ -648,7 +855,14 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         return sheetPeriod ?: LocalDate.now().toString().substring(0, 7)
     }
 
-    private fun refreshAfterWrite(houseId: Int) {
+    private fun refreshAfterWrite(houseId: Int?) {
+        // A flush has no single house: the day's board is what a collector is looking at when rows go
+        // out in the background, so that is what gets re-read.
+        if (houseId == null) {
+            if (screen.value is Screen.Areas) loadAreas()
+            return
+        }
+
         loadHouse(houseId)
 
         val areaId = (screen.value as? Screen.House)?.areaId
@@ -729,31 +943,4 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The writes this app makes, as values it can keep and resend. */
-    private sealed interface Attempt {
-        val key: String
-        val houseId: Int
-        val payload: String
-
-        data class Reading(
-            override val key: String,
-            override val houseId: Int,
-            val period: String,
-            val currentReading: String,
-            val note: String?,
-            val estimatedKwh: String?,
-            val reason: String?,
-            override val payload: String,
-        ) : Attempt
-
-        data class Collection(
-            override val key: String,
-            override val houseId: Int,
-            val amount: String,
-            val currency: String,
-            val rate: String?,
-            val note: String?,
-            override val payload: String,
-        ) : Attempt
-    }
 }

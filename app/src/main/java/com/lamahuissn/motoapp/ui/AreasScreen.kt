@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ElectricMeter
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Payments
@@ -63,6 +64,7 @@ import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.AreasBoard
 import com.lamahuissn.motoapp.data.CollectorStats
 import com.lamahuissn.motoapp.data.MotoArea
+import com.lamahuissn.motoapp.data.QueuedWrite
 import com.lamahuissn.motoapp.data.SearchHit
 import java.time.LocalDate
 import java.time.LocalTime
@@ -88,12 +90,17 @@ fun AreasScreen(
     onRefresh: () -> Unit,
     onSignOut: () -> Unit,
     onOpen: (MotoArea) -> Unit,
+    queue: List<QueuedWrite> = emptyList(),
+    onOpenQueue: () -> Unit = {},
     onBack: (() -> Unit)? = null,
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
 
     val searching = query.trim().length >= 2
+
+    // What the office has not answered about yet — the number the collector sees before anything else.
+    val owed = queue.filter { it.isOpen }
 
     // Search mode follows the QUERY only, never the field's focus.
     //
@@ -168,6 +175,13 @@ fun AreasScreen(
                     ) {
                         if (!searchMode) {
                             item { Greeting(userName = userName, period = board.label) }
+
+                            // Anything the office has not answered about yet is the FIRST thing on the
+                            // day: a collector who cannot tell «the office has my money» from «my phone
+                            // has my money» will stop trusting either (spec 010).
+                            if (owed.isNotEmpty()) {
+                                item { QueueCard(owed = owed.size, onOpen = onOpenQueue) }
+                            }
 
                             // The web dashboard's first row: what he took today and what he has taken
                             // this month — the collector's own money, summed by the office, never by the
@@ -271,6 +285,50 @@ fun AreasScreen(
                 TextButton(onClick = { confirmingSignOut = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
+    }
+}
+
+/**
+ * The queue as one line on the day's screen (spec 010).
+ *
+ * At the TOP of the list, and only when something is owed: a collector holding cash against a record the
+ * office has not answered about must not have to go looking for that fact. Tapping it opens the queue.
+ */
+@Composable
+private fun QueueCard(owed: Int, onOpen: () -> Unit) {
+    MotoCard(onClick = onOpen, padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Tile(tone = Tone.Warning, size = 36.dp) {
+                Icon(
+                    imageVector = Icons.Filled.CloudOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = LocalContentColor.current,
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.queue_card_title),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = pluralStringResource(R.plurals.queue_card_hint, owed, owed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowLeft,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
