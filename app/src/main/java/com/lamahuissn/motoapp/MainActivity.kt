@@ -16,6 +16,7 @@ import com.lamahuissn.motoapp.ui.AreasScreen
 import com.lamahuissn.motoapp.ui.HouseScreen
 import com.lamahuissn.motoapp.ui.HousesScreen
 import com.lamahuissn.motoapp.ui.LoginScreen
+import com.lamahuissn.motoapp.ui.ManagerScreen
 import com.lamahuissn.motoapp.ui.MotoViewModel
 import com.lamahuissn.motoapp.ui.Screen
 import com.lamahuissn.motoapp.ui.theme.MotoAppTheme
@@ -112,6 +113,20 @@ private fun MotoApp(model: MotoViewModel) {
                 onCollect = model::submitCollection,
                 onRetryWrite = model::retryPending,
                 onDismissOutcome = model::clearOutcome,
+            )
+        }
+
+        Screen.Manager -> {
+            val manager by model.manager.collectAsState()
+
+            ManagerScreen(
+                userName = session?.user?.name.orEmpty(),
+                load = manager,
+                problem = problem,
+                onRefresh = model::loadManager,
+                onOpenAreas = model::openAreas,
+                onSignOut = model::signOut,
+                onOpenHouse = model::openHouseById,
             )
         }
     }

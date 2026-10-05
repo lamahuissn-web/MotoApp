@@ -16,7 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -35,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.ui.theme.AmberInk
 import com.lamahuissn.motoapp.ui.theme.BlueInk
 import com.lamahuissn.motoapp.ui.theme.DangerInk
@@ -131,6 +140,21 @@ object Money {
 
     /** The office's rate as a field shows it: `90000`, not `90000.0`. */
     fun rateText(value: Double): String =
+        if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+
+    /**
+     * A percentage.
+     *
+     * The sign and the `%` are bidi-neutral: inside an Arabic sentence «36.2%» renders as «%36.2» and
+     * «-28.9%» as «%28.9-». Isolating keeps each figure with its sign — the same trick the panel uses.
+     */
+    fun percent(value: Double): String = "\u2066" + trim(value) + "%\u2069"
+
+    /** A change against last month: `+3.4`, with its sign, isolated for the same reason. */
+    fun delta(value: Double): String =
+        "\u2066" + (if (value >= 0) "+" else "") + trim(value) + "\u2069"
+
+    private fun trim(value: Double): String =
         if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
 }
 
@@ -532,6 +556,68 @@ fun ProblemCard(
             Spacer(Modifier.height(6.dp))
             OutlineButton(text = retryLabel, onClick = onRetry, height = 40.dp)
         }
+    }
+}
+
+/** A small square action in the brand bar: refresh, sign out, and the like. */
+@Composable
+fun IconAction(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * The brand bar every home screen wears: the ⚡ tile, the product's name, and the two things a user does
+ * from anywhere — refresh, and hand the phone over. The same bar on the collector's areas and on the
+ * manager's board, so the app does not become two apps.
+ */
+@Composable
+fun MotoAppBar(subtitle: String, onRefresh: () -> Unit, onSignOut: () -> Unit) {
+    Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Tile(tone = Tone.Primary, size = 36.dp) {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = LocalContentColor.current,
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                MicroLabel(subtitle)
+            }
+
+            IconAction(Icons.Filled.Refresh, stringResource(R.string.refresh), onRefresh)
+            Spacer(Modifier.width(8.dp))
+            IconAction(Icons.Filled.SwitchAccount, stringResource(R.string.sign_out), onSignOut)
+        }
+
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 

@@ -112,6 +112,13 @@ object MotoApi {
         return call(Request.Builder().url(url).authorized(token).build()) { parseSearch(it) }
     }
 
+    /**
+     * The manager's board (spec 009, phase A). Read-only, and behind `api.role:admin` on the server.
+     */
+    suspend fun managerBoard(token: String, period: String? = null): ApiCall<ManagerBoard> = call(
+        Request.Builder().url("$baseUrl/api/v1/manager/board${periodQuery(period)}").authorized(token).build(),
+    ) { parseManagerBoard(it) }
+
     /** One house in full, with the invoices the office holds against it. */
     suspend fun house(token: String, subscriberId: Int, period: String? = null): ApiCall<House> = call(
         Request.Builder().url("$baseUrl/api/v1/houses/$subscriberId${periodQuery(period)}").authorized(token).build(),
@@ -298,6 +305,64 @@ object MotoApi {
                 owes = hit.optBoolean("owes"),
             )
         }
+    }
+
+    fun parseManagerBoard(body: String): ManagerBoard? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val money = row.optJSONObject("money") ?: return null
+        val houses = row.optJSONObject("houses")
+        val kwh = row.optJSONObject("kwh")
+        val collectors = row.optJSONArray("collectors")
+        val recent = row.optJSONArray("recent_payments")
+
+        return ManagerBoard(
+            period = row.optString("period"),
+            label = row.optString("label"),
+            invoiced = money.optString("invoiced"),
+            collected = money.optString("collected"),
+            rate = money.optDouble("rate", 0.0),
+            ratePrevious = money.optDouble("rate_previous", 0.0),
+            outstanding = money.optString("outstanding"),
+            outstandingInactive = money.optString("outstanding_inactive"),
+            active = houses?.optInt("active") ?: 0,
+            metered = houses?.optInt("metered") ?: 0,
+            flat = houses?.optInt("flat") ?: 0,
+            kwh = kwh?.optString("total").orEmpty(),
+            kwhPrice = kwh?.optString("price").orEmpty(),
+            collectors = if (collectors == null) {
+                emptyList()
+            } else {
+                (0 until collectors.length()).map { index ->
+                    val line = collectors.getJSONObject(index)
+                    ManagerCollector(
+                        id = line.optInt("id"),
+                        name = line.optString("name"),
+                        todayTotal = line.optString("today_total"),
+                        todayCount = line.optInt("today_count"),
+                        collected = line.optString("collected"),
+                        paymentsCount = line.optInt("payments_count"),
+                        handed = line.optString("handed"),
+                        inHand = line.optString("in_hand"),
+                    )
+                }
+            },
+            recentPayments = if (recent == null) {
+                emptyList()
+            } else {
+                (0 until recent.length()).map { index ->
+                    val line = recent.getJSONObject(index)
+                    RecentPayment(
+                        id = line.optInt("id"),
+                        subscriberId = line.optInt("subscriber_id"),
+                        number = line.optString("number").takeIf { it.isNotEmpty() && it != "null" },
+                        amount = line.optString("amount"),
+                        subscriber = line.optString("subscriber").takeIf { it.isNotEmpty() && it != "null" },
+                        collector = line.optString("collector").takeIf { it.isNotEmpty() && it != "null" },
+                        collectedOn = line.optString("collected_on").takeIf { it.isNotEmpty() && it != "null" },
+                    )
+                }
+            },
+        )
     }
 
     private fun parseArea(row: JSONObject): MotoArea = MotoArea(

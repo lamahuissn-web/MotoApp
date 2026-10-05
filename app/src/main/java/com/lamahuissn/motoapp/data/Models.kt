@@ -58,6 +58,55 @@ data class CollectorStats(
 /** Cash he has already walked to the office: a date, an amount, and whatever he wrote with it. */
 data class Handover(val date: String?, val amount: String, val note: String?)
 
+/**
+ * The manager's board (spec 009, phase A) — the office's month, and what every collector is holding.
+ *
+ * Read-only by decision: a manager away from his desk reads, he does not post. Every figure is the
+ * office's own (OfficeBoard / CollectionService / CollectorStats), so the desk and the pocket cannot
+ * disagree about the month.
+ */
+data class ManagerBoard(
+    val period: String,
+    val label: String,
+    val invoiced: String,
+    val collected: String,
+    val rate: Double,
+    val ratePrevious: Double,
+    val outstanding: String,
+    val outstandingInactive: String,
+    val active: Int,
+    val metered: Int,
+    val flat: Int,
+    val kwh: String,
+    val kwhPrice: String,
+    val collectors: List<ManagerCollector>,
+    val recentPayments: List<RecentPayment>,
+)
+
+/** One collector as the manager sees him: his day, his cycle, and the cash the office is waiting for. */
+data class ManagerCollector(
+    val id: Int,
+    val name: String,
+    val todayTotal: String,
+    val todayCount: Int,
+    val collected: String,
+    val paymentsCount: Int,
+    val handed: String,
+    val inHand: String,
+) {
+    val holds: Boolean get() = inHand != "0.00"
+}
+
+data class RecentPayment(
+    val id: Int,
+    val subscriberId: Int,
+    val number: String?,
+    val amount: String,
+    val subscriber: String?,
+    val collector: String?,
+    val collectedOn: String?,
+)
+
 /** One household found by search: enough to recognise the door before walking to it. */
 data class SearchHit(
     val id: Int,

@@ -11,6 +11,7 @@ import com.lamahuissn.motoapp.data.AreasBoard
 import com.lamahuissn.motoapp.data.AttemptKey
 import com.lamahuissn.motoapp.data.CollectionAnswer
 import com.lamahuissn.motoapp.data.House
+import com.lamahuissn.motoapp.data.ManagerBoard
 import com.lamahuissn.motoapp.data.MotoApi
 import com.lamahuissn.motoapp.data.MotoArea
 import com.lamahuissn.motoapp.data.ReadingAnswer
@@ -29,6 +30,8 @@ import java.time.LocalDate
 sealed interface Screen {
     data object Login : Screen
     data object Areas : Screen
+    /** The manager's board — the home of a manager's session (spec 009). */
+    data object Manager : Screen
     data class Houses(val areaId: Int, val areaName: String) : Screen
     data class House(val areaId: Int, val areaName: String, val houseId: Int) : Screen
 }
@@ -76,7 +79,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     private val _session = MutableStateFlow(vault.load())
     val session: StateFlow<Session?> = _session.asStateFlow()
 
-    private val _screen = MutableStateFlow<Screen>(if (_session.value == null) Screen.Login else Screen.Areas)
+    private val _screen = MutableStateFlow<Screen>(homeFor(_session.value))
     val screen: StateFlow<Screen> = _screen.asStateFlow()
 
     private val _board = MutableStateFlow<Load<AreasBoard>>(Load.Idle)
@@ -118,6 +121,15 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     private var searchJob: Job? = null
 
+    /**
+     * The manager's board (spec 009).
+     *
+     * Read-only by the owner's decision, and only ever loaded for a manager — the endpoint refuses a
+     * collector anyway, but the app should not ask for what it has no right to see.
+     */
+    private val _manager = MutableStateFlow<Load<ManagerBoard>>(Load.Idle)
+    val manager: StateFlow<Load<ManagerBoard>> = _manager.asStateFlow()
+
     /** The attempt whose answer is not known yet, kept across retries (see this class's docblock). */
     private var pending: Attempt? = null
 
@@ -138,10 +150,20 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     private val houseCache = HashMap<Int, House>()
 
     init {
-        // A collector who signed in yesterday opens the sheet he is about to walk, not a login box.
-        if (_session.value != null) {
-            loadAreas()
+        // A collector who signed in yesterday opens the sheet he is about to walk, not a login box —
+        // and a manager opens his board.
+        when (homeFor(_session.value)) {
+            Screen.Areas -> loadAreas()
+            Screen.Manager -> loadManager()
+            else -> Unit
         }
+    }
+
+    /** Where a session's holder belongs: a manager reads his board, a collector walks his areas. */
+    private fun homeFor(session: Session?): Screen = when {
+        session == null -> Screen.Login
+        session.user.isAdmin -> Screen.Manager
+        else -> Screen.Areas
     }
 
     /* ------------------------------------------------------------------ the door */
@@ -157,9 +179,13 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 is ApiCall.Success -> {
                     vault.save(call.value)
                     _session.value = call.value
-                    _screen.value = Screen.Areas
+                    _screen.value = homeFor(call.value)
                     _busy.value = false
-                    loadAreas()
+
+                    when (_screen.value) {
+                        Screen.Manager -> loadManager()
+                        else -> loadAreas()
+                    }
                 }
 
                 else -> {
@@ -181,6 +207,8 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         _board.value = Load.Idle
         _sheet.value = Load.Idle
         _house.value = Load.Idle
+        _manager.value = Load.Idle
+        _search.value = Load.Idle
         _problem.value = null
         _outcome.value = null
         pending = null
@@ -189,6 +217,49 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         if (token != null) {
             viewModelScope.launch { MotoApi.logout(token) }
         }
+    }
+
+    /* --------------------------------------------------------------- the manager */
+
+    /**
+     * The manager's board: the office's month and what each collector is holding.
+     *
+     * Read-only by decision (spec 009, phase A) — the phone asks for no figures it cannot see a second
+     * time on the desk, and it writes nothing at all from a manager's pocket.
+     */
+    fun loadManager() {
+        val token = _session.value?.token ?: return
+
+        if (_manager.value !is Load.Ready) {
+            _manager.value = Load.Busy
+        }
+
+        _problem.value = null
+
+        viewModelScope.launch {
+            when (val call = MotoApi.managerBoard(token)) {
+                is ApiCall.Success -> _manager.value = Load.Ready(call.value)
+
+                else -> {
+                    _problem.value = problem(call)
+
+                    if (_manager.value !is Load.Ready) {
+                        _manager.value = Load.Failed(_problem.value?.message)
+                    }
+                }
+            }
+        }
+    }
+
+    fun openAreas() {
+        _screen.value = Screen.Areas
+        loadAreas()
+    }
+
+    /** Open a household the manager picked from the board — there is no area sheet behind it. */
+    fun openHouseById(id: Int) {
+        _screen.value = Screen.House(areaId = 0, areaName = "", houseId = id)
+        loadHouse(id)
     }
 
     /* ------------------------------------------------------------- the collector */

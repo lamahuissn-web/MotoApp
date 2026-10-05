@@ -122,7 +122,8 @@ fun AreasScreen(
             .imePadding()
             .navigationBarsPadding(),
     ) {
-        AppBar(
+        MotoAppBar(
+            subtitle = stringResource(R.string.app_tagline),
             onRefresh = onRefresh,
             onSignOut = { confirmingSignOut = true },
         )
@@ -267,68 +268,6 @@ fun AreasScreen(
             dismissButton = {
                 TextButton(onClick = { confirmingSignOut = false }) { Text(stringResource(R.string.cancel)) }
             },
-        )
-    }
-}
-
-/**
- * The panel's app bar: the brand tile, the product's name over the collector's, and the two things he
- * does from anywhere — refresh the day, or hand the phone over.
- */
-@Composable
-private fun AppBar(onRefresh: () -> Unit, onSignOut: () -> Unit) {
-    Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Tile(tone = Tone.Primary, size = 36.dp) {
-                Icon(
-                    imageVector = Icons.Filled.Bolt,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = LocalContentColor.current,
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                // Not the collector's name: it is already the greeting under this bar, and on a phone
-                // the panel hides its own copy for the same reason.
-                MicroLabel(stringResource(R.string.app_tagline))
-            }
-
-            IconAction(Icons.Filled.Refresh, stringResource(R.string.refresh), onRefresh)
-            Spacer(Modifier.width(8.dp))
-            IconAction(Icons.Filled.SwitchAccount, stringResource(R.string.sign_out), onSignOut)
-        }
-
-        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
-    }
-}
-
-@Composable
-private fun IconAction(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
         )
     }
 }
