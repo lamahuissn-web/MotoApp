@@ -51,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
@@ -92,14 +91,16 @@ fun AreasScreen(
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var focused by remember { mutableStateOf(false) }
 
     val searching = query.trim().length >= 2
 
-    // While the field is live, the day's cards step aside: the keyboard takes half the screen, and a
-    // collector who has just typed a household's name needs the ANSWERS under his hand, not a screenful
-    // of totals he has to scroll past with the keyboard still open.
-    val searchMode = focused || query.isNotEmpty()
+    // Search mode follows the QUERY only, never the field's focus.
+    //
+    // Following focus was the first attempt, and it shook: touching the field flipped the layout, the
+    // layout change rebuilt the field inside the list, the rebuilt field lost focus, the layout flipped
+    // back — a loop with the keyboard never getting a chance to open. The query is state the typing
+    // owns, so nothing the layout does can undo it.
+    val searchMode = query.isNotEmpty()
 
     val listState = rememberLazyListState()
 
@@ -141,42 +142,45 @@ fun AreasScreen(
             is Load.Ready -> {
                 val board = load.value
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (!searchMode) {
-                        item { Greeting(userName = userName, period = board.label) }
-
-                        // The web dashboard's first row: what he took today and what he has taken this
-                        // month — the collector's own money, summed by the office, never by the phone.
-                        board.stats?.let { stats ->
-                            item { MoneyRow(stats) }
-                        }
-
-                        item { ShiftCounts(board) }
-
-                        board.stats?.let { stats ->
-                            item { CashInHand(stats) }
-                        }
-                    }
-
-                    item {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // The field is pinned under the brand bar, OUTSIDE the scrolling list, so typing
+                    // never moves it and nothing the list does can take its focus away. This is the
+                    // whole fix for the shaking screen.
+                    Box(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
                         SearchField(
                             query = query,
                             onChange = { query = it; onSearch(it) },
-                            onFocus = { focused = it },
                             onClear = {
                                 query = ""
-                                focused = false
                                 onSearch("")
                             },
                         )
                     }
 
-                    if (searching) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState,
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (!searchMode) {
+                            item { Greeting(userName = userName, period = board.label) }
+
+                            // The web dashboard's first row: what he took today and what he has taken
+                            // this month — the collector's own money, summed by the office, never by the
+                            // phone.
+                            board.stats?.let { stats ->
+                                item { MoneyRow(stats) }
+                            }
+
+                            item { ShiftCounts(board) }
+
+                            board.stats?.let { stats ->
+                                item { CashInHand(stats) }
+                            }
+                        }
+
+                        if (searching) {
                         item {
                             SectionHeading(
                                 text = stringResource(R.string.search_results),
@@ -234,14 +238,15 @@ fun AreasScreen(
                         }
                     }
 
-                    if (problem != null && !searchMode) {
-                        item {
-                            ProblemCard(
-                                title = stringResource(R.string.areas_failed_title),
-                                message = problem.message,
-                                code = problem.code,
-                                onRetry = onRefresh,
-                            )
+                        if (problem != null && !searchMode) {
+                            item {
+                                ProblemCard(
+                                    title = stringResource(R.string.areas_failed_title),
+                                    message = problem.message,
+                                    code = problem.code,
+                                    onRetry = onRefresh,
+                                )
+                            }
                         }
                     }
                 }
@@ -623,7 +628,6 @@ private fun CashInHand(stats: CollectorStats) {
 private fun SearchField(
     query: String,
     onChange: (String) -> Unit,
-    onFocus: (Boolean) -> Unit,
     onClear: () -> Unit,
 ) {
     Row(
@@ -656,9 +660,7 @@ private fun SearchField(
             ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .weight(1f)
-                .onFocusChanged { onFocus(it.isFocused) },
+            modifier = Modifier.weight(1f),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
