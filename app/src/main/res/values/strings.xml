@@ -115,19 +115,43 @@
     <!-- اللوحة نفسها: التصميم كما يراه الجابي على الويب -->
     <string name="greeting_morning">صباح الخير، %1$s</string>
     <string name="greeting_evening">مساء الخير، %1$s</string>
-    <string name="areas_count">%1$d منطقة</string>
-    <string name="area_row_meta">%1$d بيت · %2$d نشط</string>
+    <!-- العدّ بالعربية: «3 مناطق» و«6 بيوت»، لا «3 منطقة» و«6 بيت» -->
+    <plurals name="areas_count">
+        <item quantity="one">منطقة واحدة</item>
+        <item quantity="two">منطقتان</item>
+        <item quantity="few">%1$d مناطق</item>
+        <item quantity="many">%1$d منطقة</item>
+        <item quantity="other">%1$d منطقة</item>
+    </plurals>
+    <plurals name="houses_count">
+        <item quantity="one">بيت واحد</item>
+        <item quantity="two">بيتان</item>
+        <item quantity="few">%1$d بيوت</item>
+        <item quantity="many">%1$d بيتًا</item>
+        <item quantity="other">%1$d بيت</item>
+    </plurals>
+    <plurals name="houses_due_count">
+        <item quantity="one">بيت واحد عليه دين</item>
+        <item quantity="two">بيتان عليهما دين</item>
+        <item quantity="few">%1$d بيوت عليها دين</item>
+        <item quantity="many">%1$d بيتًا عليها دين</item>
+        <item quantity="other">%1$d بيت عليه دين</item>
+    </plurals>
+    <plurals name="months_count">
+        <item quantity="one">شهر واحد غير مدفوع</item>
+        <item quantity="two">شهران غير مدفوعين</item>
+        <item quantity="few">%1$d أشهر غير مدفوعة</item>
+        <item quantity="many">%1$d شهرًا غير مدفوع</item>
+        <item quantity="other">%1$d شهر غير مدفوع</item>
+    </plurals>
+    <string name="area_row_meta">%1$s · %2$d نشط</string>
     <string name="due_label">مستحق</string>
     <string name="settled_label">مسدّد</string>
-    <string name="strip_houses_value">%1$d بيت</string>
     <string name="strip_readings_sub">هذا الشهر</string>
     <string name="strip_owing_sub">بيوت عليها دين</string>
-    <string name="houses_count">%1$d بيت</string>
-    <string name="houses_due_count">%1$d عليه دين</string>
     <string name="chip_read">قُرئ</string>
     <string name="chip_awaiting">بانتظار قراءة</string>
     <string name="house_meter_short">عدّاد %1$s</string>
-    <string name="house_months_count">%1$d شهر غير مدفوع</string>
     <string name="house_active">فعّال</string>
     <string name="house_inactive">موقوف</string>
     <string name="house_discount_line">خصم دائم %1$s%%</string>

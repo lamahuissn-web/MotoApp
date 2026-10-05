@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,7 +60,9 @@ fun HousesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -87,8 +92,9 @@ fun HousesScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = sheet?.let { stringResource(R.string.houses_count, it.houses.size) }
-                            ?: stringResource(R.string.houses_period, ""),
+                        text = sheet?.let {
+                            pluralStringResource(R.plurals.houses_count, it.houses.size, it.houses.size)
+                        } ?: stringResource(R.string.houses_period, ""),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -104,7 +110,7 @@ fun HousesScreen(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Badge(
-                        text = stringResource(R.string.houses_due_count, owing),
+                        text = pluralStringResource(R.plurals.houses_due_count, owing, owing),
                         tone = if (owing > 0) Tone.Danger else Tone.Success,
                         size = BadgeSize.Medium,
                     )
@@ -148,7 +154,11 @@ fun HousesScreen(
                 item {
                     SectionHeading(
                         text = stringResource(R.string.houses_section),
-                        trailing = stringResource(R.string.houses_count, load.value.houses.size),
+                        trailing = pluralStringResource(
+                            R.plurals.houses_count,
+                            load.value.houses.size,
+                            load.value.houses.size,
+                        ),
                     )
                 }
 
@@ -276,7 +286,7 @@ private fun houseRowMeta(house: House): String {
     }
 
     if (house.unpaidMonths.isNotEmpty()) {
-        parts += stringResource(R.string.house_months_count, house.unpaidMonths.size)
+        parts += pluralStringResource(R.plurals.months_count, house.unpaidMonths.size, house.unpaidMonths.size)
     }
 
     if (house.flatAndNotBilled) {

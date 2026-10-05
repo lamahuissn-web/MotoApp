@@ -12,14 +12,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ElectricMeter
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwitchAccount
@@ -39,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,10 +77,13 @@ fun AreasScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            // Edge-to-edge is on: without this the brand bar renders under the phone's own status bar,
+            // which is where the owner saw the battery and the clock sitting on top of the header.
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
         AppBar(
-            userName = userName,
             onRefresh = onRefresh,
             onSignOut = { confirmingSignOut = true },
         )
@@ -100,14 +108,14 @@ fun AreasScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    item { Greeting(userName = userName, period = board.periodText) }
+                    item { Greeting(userName = userName, period = board.label) }
 
                     item { ShiftCounts(board) }
 
                     item {
                         SectionHeading(
                             text = stringResource(R.string.areas_section),
-                            trailing = stringResource(R.string.areas_count, board.areas.size),
+                            trailing = pluralStringResource(R.plurals.areas_count, board.areas.size, board.areas.size),
                         )
                     }
 
@@ -164,7 +172,7 @@ fun AreasScreen(
  * does from anywhere — refresh the day, or hand the phone over.
  */
 @Composable
-private fun AppBar(userName: String, onRefresh: () -> Unit, onSignOut: () -> Unit) {
+private fun AppBar(onRefresh: () -> Unit, onSignOut: () -> Unit) {
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Row(
             modifier = Modifier
@@ -188,7 +196,9 @@ private fun AppBar(userName: String, onRefresh: () -> Unit, onSignOut: () -> Uni
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleSmall,
                 )
-                MicroLabel(userName)
+                // Not the collector's name: it is already the greeting under this bar, and on a phone
+                // the panel hides its own copy for the same reason.
+                MicroLabel(stringResource(R.string.app_tagline))
             }
 
             IconAction(Icons.Filled.Refresh, stringResource(R.string.refresh), onRefresh)
@@ -221,7 +231,7 @@ private fun IconAction(icon: ImageVector, description: String, onClick: () -> Un
 
 /** The panel's heading: a greeting that matches the hour, this collector's name, and the date. */
 @Composable
-private fun Greeting(userName: String, period: String) {
+private fun Greeting(userName: String, period: String?) {
     val morning = LocalTime.now().hour < 12
 
     Column(modifier = Modifier.padding(bottom = 4.dp)) {
@@ -239,8 +249,13 @@ private fun Greeting(userName: String, period: String) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.width(8.dp))
-            Badge(text = period, tone = Tone.Primary)
+
+            // The cycle's own name, and only when the office sent one: a badge reading «2026-10»
+            // beside the date «2026-10-05» was the same fact printed twice.
+            if (period != null) {
+                Spacer(Modifier.width(8.dp))
+                Badge(text = period, tone = Tone.Primary)
+            }
         }
     }
 }
@@ -260,7 +275,7 @@ private fun ShiftCounts(board: AreasBoard) {
         StatCard(
             label = stringResource(R.string.strip_areas),
             value = board.areas.size.toString(),
-            sub = stringResource(R.string.strip_houses_value, houses),
+            sub = pluralStringResource(R.plurals.houses_count, houses, houses),
             tone = Tone.Info,
             icon = Icons.Filled.Place,
             modifier = Modifier.weight(1f),
@@ -270,7 +285,7 @@ private fun ShiftCounts(board: AreasBoard) {
             value = "$read/$toRead",
             sub = stringResource(R.string.strip_readings_sub),
             tone = if (toRead > 0 && read >= toRead) Tone.Success else Tone.Warning,
-            icon = Icons.Filled.Place,
+            icon = Icons.Filled.ElectricMeter,
             modifier = Modifier.weight(1f),
         )
         StatCard(
@@ -278,7 +293,7 @@ private fun ShiftCounts(board: AreasBoard) {
             value = owing.toString(),
             sub = stringResource(R.string.strip_owing_sub),
             tone = if (owing > 0) Tone.Danger else Tone.Success,
-            icon = Icons.Filled.Place,
+            icon = Icons.Filled.Payments,
             modifier = Modifier.weight(1f),
         )
     }
@@ -344,7 +359,11 @@ private fun AreaRow(area: MotoArea, onOpen: () -> Unit) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = stringResource(R.string.area_row_meta, area.houses, area.active),
+                    text = stringResource(
+                        R.string.area_row_meta,
+                        pluralStringResource(R.plurals.houses_count, area.houses, area.houses),
+                        area.active,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
