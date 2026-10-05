@@ -256,8 +256,58 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         loadAreas()
     }
 
+    /**
+     * Back from the day's areas.
+     *
+     * A manager reached the network from his board, so the network is a step he took and can take back;
+     * refreshing the board on the way in keeps the figures he returns to current with what he just saw.
+     * A collector's areas ARE his home — there is nowhere above them to go.
+     */
+    fun backFromAreas() {
+        if (_session.value?.user?.isAdmin != true) return
+
+        _screen.value = Screen.Manager
+        loadManager()
+    }
+
+    /**
+     * What the phone's own back button does: it walks the same journey the arrows do, so a phone held
+     * in one hand never closes mid-task. Returns false when this screen IS home, which lets the system
+     * end the app the way the user expects.
+     */
+    fun back(): Boolean = when (_screen.value) {
+        is Screen.House -> {
+            backToSheet()
+            true
+        }
+
+        is Screen.Houses -> {
+            backToAreas()
+            true
+        }
+
+        Screen.Areas -> {
+            if (_session.value?.user?.isAdmin == true) {
+                backFromAreas()
+                true
+            } else {
+                false
+            }
+        }
+
+        else -> false
+    }
+
+    /**
+     * Where a household opened from OUTSIDE the area sheets came from — the manager's board, or a
+     * search. Those houses carry `areaId = 0` (there is no sheet behind them), so back has to be told
+     * where «back» is; without this, the manager's board was a screen he could not return to.
+     */
+    private var houseOrigin: Screen? = null
+
     /** Open a household the manager picked from the board — there is no area sheet behind it. */
     fun openHouseById(id: Int) {
+        houseOrigin = Screen.Manager
         _screen.value = Screen.House(areaId = 0, areaName = "", houseId = id)
         loadHouse(id)
     }
@@ -372,6 +422,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     /** Open a household found by search: there is no area sheet behind it, so going back goes home. */
     fun openSearchHit(hit: SearchHit) {
         clearSearch()
+        houseOrigin = Screen.Areas
         _screen.value = Screen.House(areaId = 0, areaName = hit.route.orEmpty(), houseId = hit.id)
         loadHouse(hit.id)
     }
@@ -409,11 +460,14 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun backToSheet() {
         val from = screen.value as? Screen.House
+        val origin = houseOrigin
+        houseOrigin = null
 
-        // A household opened from a search has no sheet behind it: going back goes to the day's areas
-        // rather than asking the server for the houses of area «0».
+        // A household opened from a search or from the manager's board has no sheet behind it: going
+        // back goes where it was opened from, rather than asking the server for the houses of area «0».
         _screen.value = from?.takeIf { it.areaId != 0 }
             ?.let { Screen.Houses(it.areaId, it.areaName) }
+            ?: origin
             ?: Screen.Areas
 
         _house.value = Load.Idle

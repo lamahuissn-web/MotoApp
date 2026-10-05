@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwitchAccount
@@ -583,9 +584,18 @@ fun IconAction(icon: ImageVector, description: String, onClick: () -> Unit) {
  * The brand bar every home screen wears: the ⚡ tile, the product's name, and the two things a user does
  * from anywhere — refresh, and hand the phone over. The same bar on the collector's areas and on the
  * manager's board, so the app does not become two apps.
+ *
+ * `onBack` is for a screen that is a step rather than a home: a manager who walked down to the network
+ * needs the way back up, and an app whose only exit from a secondary screen is the system's back button
+ * is an app you close by accident.
  */
 @Composable
-fun MotoAppBar(subtitle: String, onRefresh: () -> Unit, onSignOut: () -> Unit) {
+fun MotoAppBar(
+    subtitle: String,
+    onRefresh: () -> Unit,
+    onSignOut: () -> Unit,
+    onBack: (() -> Unit)? = null,
+) {
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Row(
             modifier = Modifier
@@ -593,6 +603,15 @@ fun MotoAppBar(subtitle: String, onRefresh: () -> Unit, onSignOut: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onBack != null) {
+                IconAction(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    description = stringResource(R.string.back),
+                    onClick = onBack,
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+
             Tile(tone = Tone.Primary, size = 36.dp) {
                 Icon(
                     imageVector = Icons.Filled.Bolt,

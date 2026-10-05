@@ -88,6 +88,7 @@ fun AreasScreen(
     onRefresh: () -> Unit,
     onSignOut: () -> Unit,
     onOpen: (MotoArea) -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -126,6 +127,7 @@ fun AreasScreen(
             subtitle = stringResource(R.string.app_tagline),
             onRefresh = onRefresh,
             onSignOut = { confirmingSignOut = true },
+            onBack = onBack,
         )
 
         when (load) {

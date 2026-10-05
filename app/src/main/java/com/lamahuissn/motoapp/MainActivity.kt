@@ -2,6 +2,7 @@ package com.lamahuissn.motoapp
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,6 +60,16 @@ private fun MotoApp(model: MotoViewModel) {
     val busy by model.busy.collectAsState()
     val problem by model.problem.collectAsState()
 
+    // The phone's own back button walks the same journey the arrows do. On a home screen it stays
+    // disabled, so the system ends the app the way the user expects instead of us swallowing the press.
+    val canGoBack = when (screen) {
+        is Screen.House, is Screen.Houses -> true
+        Screen.Areas -> session?.user?.isAdmin == true
+        else -> false
+    }
+
+    BackHandler(enabled = canGoBack) { model.back() }
+
     when (val current = screen) {
         Screen.Login -> LoginScreen(
             busy = busy,
@@ -80,6 +91,7 @@ private fun MotoApp(model: MotoViewModel) {
                 onRefresh = model::loadAreas,
                 onSignOut = model::signOut,
                 onOpen = model::openArea,
+                onBack = if (session?.user?.isAdmin == true) model::backFromAreas else null,
             )
         }
 
