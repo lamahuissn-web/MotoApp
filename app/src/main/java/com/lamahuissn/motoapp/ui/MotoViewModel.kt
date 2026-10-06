@@ -69,6 +69,14 @@ data class Outcome(
     val retryable: Boolean = false,
     /** The receipt as words, when this outcome is a collection — handed on, not retyped. */
     val receipt: String? = null,
+    /**
+     * The queue row this outcome is about.
+     *
+     * A write is a row with a life of its own: it can be applied while the card is still on screen. The key
+     * is what lets the card FOLLOW its row instead of freezing the moment it was born in — a card still
+     * saying «بانتظار الشبكة» about a payment the office already took is worse than no card.
+     */
+    val key: String? = null,
 )
 
 /**
@@ -838,8 +846,23 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 ),
                 problem = problem(call),
                 retryable = true,
+                key = entry.key,
             )
         }
+    }
+
+    /**
+     * The collector came back to the app: re-read what the phone holds, and let the queue go.
+     *
+     * The job Android runs while the phone is in a pocket has its own view of the world. Without this, a
+     * screen could keep saying «بانتظار الشبكة» over a payment that went out while the app was in the
+     * background — the same lie, one resume later.
+     */
+    fun onResumed() {
+        if (_session.value == null) return
+
+        refreshQueue()
+        flush()
     }
 
     /** Where the queue is opened from, so its back returns there. */
@@ -897,6 +920,48 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     /** Re-read the queue for whoever is signed in now. The file itself is never cleared by signing out. */
     private fun refreshQueue() {
         _queue.value = QueueDecision.forUser(queueStore.load(), _session.value?.user?.id ?: -1)
+        reconcileOutcome()
+    }
+
+    /**
+     * The card follows the row it is about.
+     *
+     * A write recorded in a dead spot can be applied by the queue while its card is still on screen — the
+     * app's own flush, or the job Android runs with the phone in a pocket. Leaving «بانتظار الشبكة» over a
+     * payment the office has already taken is worse than showing nothing, so the outcome is rebuilt from
+     * what the row became: applied → «وصل المكتب» with the office's own receipt, refused → its reason.
+     */
+    private fun reconcileOutcome() {
+        val shown = _outcome.value ?: return
+        val key = shown.key ?: return
+        val row = _queue.value.firstOrNull { it.key == key } ?: return
+
+        val app = getApplication<Application>()
+        val amount = if (row.isMoney) Money.usd(row.amount.orEmpty()) else row.currentReading.orEmpty()
+
+        val settled = when (row.state) {
+            QueueState.Done -> Outcome(
+                kind = if (row.isMoney) OutcomeKind.Collection else OutcomeKind.Reading,
+                title = app.getString(R.string.outcome_delivered_title),
+                facts = listOf(row.houseName to amount),
+                receipt = row.receiptText,
+                key = row.key,
+            )
+
+            QueueState.NeedsReconciliation -> Outcome(
+                kind = OutcomeKind.Refused,
+                title = app.getString(R.string.outcome_refused_title),
+                facts = listOf(row.houseName to amount),
+                problem = Problem(row.lastError.orEmpty(), null),
+                key = row.key,
+            )
+
+            else -> return
+        }
+
+        if (settled != shown) {
+            _outcome.value = settled
+        }
     }
 
     /* ------------------------------------------------------------------ internals */
