@@ -1,17 +1,26 @@
 package com.lamahuissn.motoapp
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lamahuissn.motoapp.ui.AreasScreen
 import com.lamahuissn.motoapp.ui.HouseScreen
@@ -54,6 +63,33 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Ask, once, to be allowed to speak to the collector from the notification shade.
+ *
+ * It is asked the first time a session is open rather than on launch: the request means something to a
+ * person who is already signed in and has work to lose. Android remembers a refusal; `asked` only keeps
+ * the dialog from being raised twice in one run.
+ */
+@Composable
+private fun AskToBeToldWhenSomethingWaits() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+    val context = LocalContext.current
+    var asked by rememberSaveable { mutableStateOf(false) }
+
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    LaunchedEffect(Unit) {
+        val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!asked && !granted) {
+            asked = true
+            ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+}
+
 @Composable
 private fun MotoApp(model: MotoViewModel) {
     val screen by model.screen.collectAsState()
@@ -62,6 +98,10 @@ private fun MotoApp(model: MotoViewModel) {
     val problem by model.problem.collectAsState()
     val staleAsOf by model.staleAsOf.collectAsState()
     val refreshing by model.refreshing.collectAsState()
+
+    // The phone should be able to tell him, unopened, that his recorded work has not reached the office
+    // (spec 010). Asked once, from Android 13 up; a refusal costs the notifications and nothing else.
+    if (session != null) AskToBeToldWhenSomethingWaits()
 
     // The phone's own back button walks the same journey the arrows do. On a home screen it stays
     // disabled, so the system ends the app the way the user expects instead of us swallowing the press.

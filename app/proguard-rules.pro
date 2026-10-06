@@ -3,8 +3,10 @@
 -keepnames class com.lamahuissn.motoapp.data.** { *; }
 
 # OkHttp ships its own consumer rules, and the panel's JSON is read key by key with org.json (which is
-# part of the platform), so no reflection is used anywhere in this app: no further keep rules are
-# needed. Anything added here without a reason is a rule that hides a real shrinking bug.
+# part of the platform), so the app itself uses no reflection — with ONE exception, and it needs a rule:
+# WorkManager builds its workers by class NAME, so R8 renaming QueueSyncWorker would leave a job that
+# cannot run when the phone is in the collector's pocket.
+-keep class com.lamahuissn.motoapp.work.QueueSyncWorker { <init>(android.content.Context, androidx.work.WorkerParameters); }
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**

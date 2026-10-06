@@ -14,6 +14,25 @@
     <string name="brand_mark_description">شعار التطبيق</string>
     <string name="server_label">عنوان الخادم</string>
     <string name="back">رجوع</string>
+    <string name="notif_channel">الطابور</string>
+    <string name="notif_waiting_title">عمليات لم يصل المكتب بعد</string>
+    <string name="notif_delivered_title">وصل المكتب</string>
+    <plurals name="notif_waiting_text">
+        <item quantity="zero">لا شيء معلّق</item>
+        <item quantity="one">عملية واحدة معلّقة — ستُرسَل عند رجوع الشبكة</item>
+        <item quantity="two">عمليتان معلّقتان — ستُرسَلان عند رجوع الشبكة</item>
+        <item quantity="few">%1$d عمليات معلّقة — ستُرسَل عند رجوع الشبكة</item>
+        <item quantity="many">%1$d عملية معلّقة — ستُرسَل عند رجوع الشبكة</item>
+        <item quantity="other">%1$d عملية معلّقة — ستُرسَل عند رجوع الشبكة</item>
+    </plurals>
+    <plurals name="notif_delivered_text">
+        <item quantity="zero">لا شيء أُرسل</item>
+        <item quantity="one">أُرسلت عملية واحدة كانت معلّقة</item>
+        <item quantity="two">أُرسلت عمليتان كانتا معلّقتين</item>
+        <item quantity="few">أُرسلت %1$d عمليات كانت معلّقة</item>
+        <item quantity="many">أُرسلت %1$d عملية كانت معلّقة</item>
+        <item quantity="other">أُرسلت %1$d عملية كانت معلّقة</item>
+    </plurals>
     <plurals name="queue_owed">
         <item quantity="zero">لا سجلات بانتظار الشبكة</item>
         <item quantity="one">سجل واحد بانتظار الشبكة</item>

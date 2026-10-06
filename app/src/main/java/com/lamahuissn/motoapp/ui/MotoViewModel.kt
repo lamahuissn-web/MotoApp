@@ -18,6 +18,7 @@ import com.lamahuissn.motoapp.data.MotoApi
 import com.lamahuissn.motoapp.data.MotoArea
 import com.lamahuissn.motoapp.data.OfflineCache
 import com.lamahuissn.motoapp.data.QueueDecision
+import com.lamahuissn.motoapp.data.QueueRunner
 import com.lamahuissn.motoapp.data.QueueState
 import com.lamahuissn.motoapp.data.QueuedWrite
 import com.lamahuissn.motoapp.data.ReadingAnswer
@@ -25,6 +26,8 @@ import com.lamahuissn.motoapp.data.SearchHit
 import com.lamahuissn.motoapp.data.Session
 import com.lamahuissn.motoapp.data.TokenVault
 import com.lamahuissn.motoapp.data.WriteQueueStore
+import com.lamahuissn.motoapp.work.QueueNotifier
+import com.lamahuissn.motoapp.work.QueueSync
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -154,9 +157,6 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _queue = MutableStateFlow(queueStore.load().filter { it.userId == _session.value?.user?.id })
     val queue: StateFlow<List<QueuedWrite>> = _queue.asStateFlow()
-
-    /** One flush at a time: two walks at once would both offer the same row to the server. */
-    private var flushing = false
 
     /** Where the queue was opened from, so its back returns there. */
     private var queueOrigin: Screen? = null
@@ -737,8 +737,8 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 // phone killed mid-request must still know the collector took this reading or this cash.
                 update(entry)
 
-                val call = send(entry, token)
-                val settled = settle(entry, call)
+                val call = QueueRunner.carry(entry, token)
+                val settled = QueueRunner.settleTo(entry, call)
 
                 update(settled)
                 last = settled
@@ -746,6 +746,8 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (!QueueDecision.continueAfter(settled)) break
             }
+
+            tellThePhone()
 
             if (report) {
                 _busy.value = false
@@ -772,87 +774,34 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     /** The flush itself, awaitable — so a pull gesture can hold its indicator until the queue drains. */
     private suspend fun flushNow() {
         val me = _session.value?.user?.id ?: return
-        if (flushing) return
+        val token = _session.value?.token ?: return
 
-        val owed = QueueDecision.openEntries(QueueDecision.forUser(_queue.value, me))
-        if (owed.isEmpty()) return
+        // One implementation, shared with the job Android runs when the phone is in a pocket.
+        val report = QueueRunner.drain(queueStore, me, token)
 
-        flushing = true
+        refreshQueue()
+        tellThePhone()
 
-        try {
-            var applied = false
-
-            for (entry in owed) {
-                val token = _session.value?.token ?: return
-
-                val settled = settle(entry, send(entry, token))
-                update(settled)
-
-                if (settled.state == QueueState.Done) applied = true
-                if (!QueueDecision.continueAfter(settled)) break
-            }
-
-            if (applied) refreshAfterWrite(null)
-        } finally {
-            flushing = false
-        }
+        if (report.sentAnything) refreshAfterWrite(null)
     }
 
-    /** One row as the call that carries it. The key it already has travels with it, every time. */
-    private suspend fun send(entry: QueuedWrite, token: String): ApiCall<*> = when (entry.kind) {
-        QueuedWrite.Kind.Reading -> if (entry.estimatedKwh != null) {
-            MotoApi.estimate(
-                token = token,
-                subscriberId = entry.houseId,
-                period = entry.period ?: period(),
-                kwh = entry.estimatedKwh,
-                reason = entry.reason.orEmpty(),
-                key = entry.key,
-            )
+    /**
+     * Let the phone speak without being opened (spec 010, phase B).
+     *
+     * Two things at once: Android is asked to drain the queue the moment a network appears (app open or
+     * not), and the collector is told, in a notification, that something of his has not reached the office.
+     * When nothing is owed the reminder goes — a notification that outlives its fact is noise.
+     */
+    private fun tellThePhone() {
+        val context = getApplication<Application>()
+        val owed = QueueDecision.openEntries(_queue.value).size
+
+        if (owed > 0) {
+            QueueSync.schedule(context)
+            QueueNotifier.waiting(context, owed)
         } else {
-            MotoApi.read(
-                token = token,
-                subscriberId = entry.houseId,
-                period = entry.period ?: period(),
-                currentReading = entry.currentReading.orEmpty(),
-                note = entry.note,
-                key = entry.key,
-            )
+            QueueNotifier.clear(context)
         }
-
-        QueuedWrite.Kind.Collection -> MotoApi.collect(
-            token = token,
-            subscriberId = entry.houseId,
-            amount = entry.amount.orEmpty(),
-            currency = entry.currency ?: "usd",
-            rate = entry.rate,
-            method = if (entry.currency == "lbp") "cash_lbp" else "cash_usd",
-            note = entry.note,
-            collectedOn = entry.collectedOn ?: LocalDate.now().toString(),
-            key = entry.key,
-        )
-    }
-
-    /** What the office's answer means for the row it was sent for. */
-    private fun settle(entry: QueuedWrite, call: ApiCall<*>): QueuedWrite = when (call) {
-        is ApiCall.Success<*> -> QueueDecision.afterSuccess(entry, (call.value as? CollectionAnswer)?.receiptText)
-
-        is ApiCall.Refused -> when (call.answer.code) {
-            // An expired session says nothing about the money: sign in and the row goes out again with
-            // the same key. Marking it «راجعها المكتب» would bury a receipt the office never refused.
-            "unauthenticated", "account_disabled" -> {
-                _problem.value = problem(call)
-                QueueDecision.afterUnreachable(entry, call.answer.message.orEmpty())
-            }
-
-            else -> QueueDecision.afterRefusal(entry, call.answer.message)
-        }
-
-        // Answered, but not in a shape this app can read. The row stays owed and goes out again with the
-        // same key, which the office reads as the same attempt — never as a second one.
-        is ApiCall.Unreadable -> QueueDecision.afterUnreachable(entry, call.answer.message.orEmpty())
-
-        is ApiCall.Unreachable -> QueueDecision.afterUnreachable(entry, call.trouble)
     }
 
     /** The office's own words for a write the collector just watched. */
@@ -917,6 +866,8 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
             val index = rows.indexOfFirst { it.key == entry.key }
             if (index >= 0) rows[index] = rows[index].copy(state = QueueState.Discarded)
         }
+
+        tellThePhone()
     }
 
     /* ------------------------------------------------------------------ internals */

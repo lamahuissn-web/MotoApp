@@ -128,6 +128,9 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
 
     implementation(libs.okhttp)
+    // The queue draining while the phone is in the collector's pocket: a system-managed job, not a
+    // service we keep alive (spec 010, phase B).
+    implementation(libs.androidx.work)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
