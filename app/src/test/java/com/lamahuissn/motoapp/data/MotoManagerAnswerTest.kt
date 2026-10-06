@@ -106,6 +106,37 @@ class MotoManagerAnswerTest {
     }
 
     @Test
+    fun `a recorded handover reads back with the figure left in hand`() {
+        val body = """
+            {
+              "handover": {
+                "id": 7, "collector_id": 3, "collector": "سليم ميعاري",
+                "amount": "25.00", "handover_date": "2026-10-06", "note": "نقد الأسبوع"
+              },
+              "collector_in_hand": "35.00",
+              "replay": false
+            }
+        """.trimIndent()
+
+        val answer = MotoApi.parseHandover(body)!!
+
+        assertEquals(7, answer.id)
+        assertEquals(3, answer.collectorId)
+        assertEquals("سليم ميعاري", answer.collector)
+        assertEquals("25.00", answer.amount)
+        assertEquals("2026-10-06", answer.date)
+        assertEquals("نقد الأسبوع", answer.note)
+        // The office's own figure for what is still held — the phone never subtracts to find it.
+        assertEquals("35.00", answer.collectorInHand)
+    }
+
+    @Test
+    fun `a handover answer without a handover is refused, not guessed at`() {
+        assertNull(MotoApi.parseHandover("""{"error":{"code":"refuse.handover_exceeds_in_hand"}}"""))
+        assertNull(MotoApi.parseHandover("not json at all"))
+    }
+
+    @Test
     fun `an answer that is not a board is refused, not guessed at`() {
         assertNull(MotoApi.parseManagerBoard("""{"detail": "nope"}"""))
         assertNull(MotoApi.parseManagerBoard("not json at all"))

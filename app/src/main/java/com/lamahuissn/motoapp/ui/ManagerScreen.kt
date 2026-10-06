@@ -30,17 +30,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lamahuissn.motoapp.R
+import com.lamahuissn.motoapp.data.HandoverAnswer
 import com.lamahuissn.motoapp.data.ManagerBoard
 import com.lamahuissn.motoapp.data.ManagerCollector
 import com.lamahuissn.motoapp.data.RecentPayment
+import java.time.LocalDate
 
 /**
  * The manager's board (spec 009, phase A) — the office in his pocket.
@@ -64,8 +68,12 @@ fun ManagerScreen(
     onOpenHouse: (id: Int) -> Unit,
     refreshing: Boolean = false,
     onPullRefresh: () -> Unit = {},
+    handover: Load<HandoverAnswer> = Load.Idle,
+    onHandover: (collectorId: Int, amount: String, date: String, note: String?) -> Unit = { _, _, _, _ -> },
+    onCloseHandover: () -> Unit = {},
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
+    var handoverFor by remember { mutableStateOf<ManagerCollector?>(null) }
 
     Column(
         modifier = Modifier
@@ -248,7 +256,15 @@ fun ManagerScreen(
                         }
 
                         items(board.collectors, key = { it.id }) { collector ->
-                            CollectorRow(collector)
+                            CollectorRow(
+                                collector = collector,
+                                onOpen = {
+                                    // Opening a sheet clears whatever the last one answered: a manager who
+                                    // settled with Salim must not see that receipt over Karim's name.
+                                    onCloseHandover()
+                                    handoverFor = collector
+                                },
+                            )
                         }
 
                         if (board.recentPayments.isNotEmpty()) {
@@ -290,6 +306,123 @@ fun ManagerScreen(
             },
         )
     }
+
+    handoverFor?.let { collector ->
+        HandoverDialog(
+            collector = collector,
+            load = handover,
+            onConfirm = { amount, date, note -> onHandover(collector.id, amount, date, note) },
+            onClose = {
+                handoverFor = null
+                onCloseHandover()
+            },
+        )
+    }
+}
+
+/**
+ * The manager signs for the cash he just received (spec 009, phase B).
+ *
+ * The amount starts at everything the collector holds — that is what the manager came to clear, and the
+ * figure he is least likely to have to correct. Everything the office says about it comes back here: a
+ * recorded handover with the new balance, or the engine's own refusal naming the figure the collector does
+ * hold. The phone never subtracts to check either.
+ */
+@Composable
+private fun HandoverDialog(
+    collector: ManagerCollector,
+    load: Load<HandoverAnswer>,
+    onConfirm: (amount: String, date: String, note: String?) -> Unit,
+    onClose: () -> Unit,
+) {
+    var amount by rememberSaveable(collector.id) { mutableStateOf(collector.inHand) }
+    var date by rememberSaveable(collector.id) { mutableStateOf(LocalDate.now().toString()) }
+    var note by rememberSaveable(collector.id) { mutableStateOf("") }
+
+    val busy = load is Load.Busy
+    val recorded = (load as? Load.Ready)?.value
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onClose() },
+        title = { Text(stringResource(R.string.handover_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(collector.name, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+
+                if (recorded != null) {
+                    Alert(
+                        text = stringResource(R.string.handover_recorded, Money.usd(recorded.amount)),
+                        tone = Tone.Success,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    MicroLabel(stringResource(R.string.handover_in_hand_after, Money.usd(recorded.collectorInHand)))
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.handover_in_hand_now),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Amount(
+                            value = Money.usd(collector.inHand),
+                            tone = if (collector.holds) Tone.Danger else Tone.Success,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+                    FieldBox(
+                        label = stringResource(R.string.handover_amount),
+                        value = amount,
+                        onChange = { amount = it },
+                        keyboard = KeyboardType.Decimal,
+                        prefix = "$",
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+                    FieldBox(
+                        label = stringResource(R.string.handover_date),
+                        value = date,
+                        onChange = { date = it },
+                        keyboard = KeyboardType.Number,
+                        placeholder = LocalDate.now().toString(),
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+                    FieldBox(
+                        label = stringResource(R.string.handover_note),
+                        value = note,
+                        onChange = { note = it },
+                        keyboard = KeyboardType.Text,
+                        placeholder = stringResource(R.string.optional),
+                    )
+
+                    if (load is Load.Failed) {
+                        Spacer(Modifier.height(12.dp))
+                        Alert(text = load.message.orEmpty(), tone = Tone.Danger)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (recorded != null) {
+                TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
+            } else {
+                TextButton(
+                    enabled = !busy && amount.isNotBlank() && date.isNotBlank(),
+                    onClick = { onConfirm(amount, date, note.takeIf { it.isNotBlank() }) },
+                ) {
+                    Text(stringResource(R.string.handover_confirm))
+                }
+            }
+        },
+        dismissButton = {
+            if (recorded == null) {
+                TextButton(enabled = !busy, onClick = onClose) { Text(stringResource(R.string.cancel)) }
+            }
+        },
+    )
 }
 
 /** A figure with its label and its sub-line — the panel's stat card, on a manager's phone. */
@@ -322,8 +455,8 @@ private fun ManagerStat(
  * when he has handed everything over.
  */
 @Composable
-private fun CollectorRow(collector: ManagerCollector) {
-    MotoCard(padding = 14.dp) {
+private fun CollectorRow(collector: ManagerCollector, onOpen: () -> Unit) {
+    MotoCard(onClick = onOpen, padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(name = collector.name, tone = if (collector.holds) Tone.Warning else Tone.Success)
 

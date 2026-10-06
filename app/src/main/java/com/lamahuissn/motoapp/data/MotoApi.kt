@@ -126,6 +126,32 @@ object MotoApi {
         Request.Builder().url("$baseUrl/api/v1/manager/board${periodQuery(period)}").authorized(token).build(),
     ) { parseManagerBoard(it) }
 
+    /**
+     * A collector hands cash to the office (spec 009, phase B) — the one write a manager's phone makes.
+     *
+     * It needs a key like every money write: a manager who taps «تأكيد» twice, or a request answered by a
+     * timeout and sent again, records one handover. There is no queue behind it on purpose — a handover
+     * happens in the office, and a handover that the office never answered is not a handover.
+     */
+    suspend fun handover(
+        token: String,
+        collectorId: Int,
+        amount: String,
+        date: String,
+        note: String?,
+        key: String,
+    ): ApiCall<HandoverAnswer> = money(
+        endpoint = "manager/handovers",
+        token = token,
+        key = key,
+        body = JSONObject()
+            .put("collector_id", collectorId)
+            .put("amount", amount)
+            .put("handover_date", date)
+            .put("note", note ?: JSONObject.NULL)
+            .toString(),
+    ) { parseHandover(it) }
+
     /** One house in full, with the invoices the office holds against it. */
     suspend fun house(token: String, subscriberId: Int, period: String? = null, sink: ((String) -> Unit)? = null): ApiCall<House> = call(
         Request.Builder().url("$baseUrl/api/v1/houses/$subscriberId${periodQuery(period)}").authorized(token).build(),
@@ -315,6 +341,21 @@ object MotoApi {
                 owes = hit.optBoolean("owes"),
             )
         }
+    }
+
+    fun parseHandover(body: String): HandoverAnswer? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val handover = row.optJSONObject("handover") ?: return null
+
+        return HandoverAnswer(
+            id = handover.optInt("id"),
+            collectorId = handover.optInt("collector_id"),
+            collector = handover.optString("collector"),
+            amount = handover.optString("amount"),
+            date = handover.optString("handover_date"),
+            note = handover.optString("note").takeIf { it.isNotEmpty() && it != "null" },
+            collectorInHand = row.optString("collector_in_hand"),
+        )
     }
 
     fun parseManagerBoard(body: String): ManagerBoard? {

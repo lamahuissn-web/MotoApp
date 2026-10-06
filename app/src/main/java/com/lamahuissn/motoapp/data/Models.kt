@@ -83,6 +83,21 @@ data class ManagerBoard(
     val recentPayments: List<RecentPayment>,
 )
 
+/** Cash a collector handed to the office, as the office recorded it (spec 009, phase B). */
+data class HandoverAnswer(
+    val id: Int,
+    val collectorId: Int,
+    val collector: String,
+    val amount: String,
+    val date: String,
+    val note: String?,
+    /**
+     * What the collector still holds afterwards — the figure the office reconciles its drawer against.
+     * It is the server's, not the phone's: the phone never subtracts.
+     */
+    val collectorInHand: String,
+)
+
 /** One collector as the manager sees him: his day, his cycle, and the cash the office is waiting for. */
 data class ManagerCollector(
     val id: Int,

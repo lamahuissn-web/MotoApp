@@ -288,6 +288,15 @@
     <string name="mgr_in_hand">النقد بذمّته</string>
     <string name="mgr_recent">آخر العمليات</string>
     <string name="mgr_open_areas">شبكة المناطق</string>
+    <string name="handover_title">تسجيل تسليم نقد</string>
+    <string name="handover_in_hand_now">النقد بذمّته الآن</string>
+    <string name="handover_amount">المبلغ المسلَّم</string>
+    <string name="handover_date">تاريخ التسليم (YYYY-MM-DD)</string>
+    <string name="handover_note">ملاحظة (اختياري)</string>
+    <string name="handover_confirm">تأكيد التسليم</string>
+    <string name="handover_recorded">سُجّل التسليم: %1$s</string>
+    <string name="handover_in_hand_after">النقد بذمّته بعد التسليم: %1$s</string>
+    <string name="optional">اختياري</string>
     <string name="problem_unreachable">لم يصل الهاتف إلى الخادم — تحقّق من الشبكة ثم أعِد المحاولة.</string>
     <string name="problem_unreadable">أجاب الخادم بردّ لا يعرفه التطبيق — أبلغ المكتب بالرمز المذكور.</string>
     <string name="problem_server_refused">رفض الخادم الطلب بلا سبب مكتوب.</string>

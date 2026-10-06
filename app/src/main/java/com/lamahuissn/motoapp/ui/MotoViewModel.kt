@@ -12,6 +12,7 @@ import com.lamahuissn.motoapp.data.AreaSheet
 import com.lamahuissn.motoapp.data.AreasBoard
 import com.lamahuissn.motoapp.data.AttemptKey
 import com.lamahuissn.motoapp.data.CollectionAnswer
+import com.lamahuissn.motoapp.data.HandoverAnswer
 import com.lamahuissn.motoapp.data.House
 import com.lamahuissn.motoapp.data.ManagerBoard
 import com.lamahuissn.motoapp.data.MotoApi
@@ -153,6 +154,16 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val _manager = MutableStateFlow<Load<ManagerBoard>>(Load.Idle)
     val manager: StateFlow<Load<ManagerBoard>> = _manager.asStateFlow()
+
+    /**
+     * The manager recording a collector's handover (spec 009, phase B) — the phone's one admin write.
+     *
+     * It is deliberately NOT queued: a handover the office never answered is not a handover, the manager is
+     * standing in the office where the network is, and a payment received by nobody must not read as one.
+     * The key is per attempt, so a double tap records one handover.
+     */
+    private val _handover = MutableStateFlow<Load<HandoverAnswer>>(Load.Idle)
+    val handover: StateFlow<Load<HandoverAnswer>> = _handover.asStateFlow()
 
     /**
      * The writes the office has not seen yet (spec 010) — on disk before they are sent.
@@ -327,6 +338,47 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     fun openAreas() {
         _screen.value = Screen.Areas
         loadAreas()
+    }
+
+    /**
+     * Record that a collector handed cash to the office (spec 009, phase B).
+     *
+     * The amount travels as the manager typed it and the office decides: above what the collector holds,
+     * the engine refuses by name with the figure he does hold, and that sentence is what the sheet shows —
+     * the phone never subtracts to check it.
+     */
+    fun recordHandover(collectorId: Int, amount: String, date: String, note: String?) {
+        val token = _session.value?.token ?: return
+        if (_handover.value is Load.Busy) return
+
+        _handover.value = Load.Busy
+
+        viewModelScope.launch {
+            val call = MotoApi.handover(
+                token = token,
+                collectorId = collectorId,
+                amount = amount,
+                date = date,
+                note = note,
+                key = AttemptKey.next(),
+            )
+
+            when (call) {
+                is ApiCall.Success -> {
+                    _handover.value = Load.Ready(call.value)
+
+                    // The board is a different board now: that collector is holding less. The refusal path
+                    // says nothing to the board — the office refused, so nothing changed.
+                    readManager()
+                }
+
+                else -> _handover.value = Load.Failed(problem(call).message)
+            }
+        }
+    }
+
+    fun clearHandover() {
+        _handover.value = Load.Idle
     }
 
     /**

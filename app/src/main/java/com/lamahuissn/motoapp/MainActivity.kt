@@ -218,6 +218,7 @@ private fun MotoApp(model: MotoViewModel) {
 
         Screen.Manager -> {
             val manager by model.manager.collectAsState()
+            val handover by model.handover.collectAsState()
 
             ManagerScreen(
                 userName = session?.user?.name.orEmpty(),
@@ -229,6 +230,9 @@ private fun MotoApp(model: MotoViewModel) {
                 onOpenHouse = model::openHouseById,
                 refreshing = refreshing,
                 onPullRefresh = model::refresh,
+                handover = handover,
+                onHandover = model::recordHandover,
+                onCloseHandover = model::clearHandover,
             )
         }
     }
