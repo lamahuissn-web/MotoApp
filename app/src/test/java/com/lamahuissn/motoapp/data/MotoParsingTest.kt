@@ -90,6 +90,61 @@ class MotoParsingTest {
     }
 
     @Test
+    fun `a household's file carries its receipts, and what each one cleared`() {
+        val body = """
+            {"house":{"id":7,"name":"بيت أبو علي","phone":null,"type":"flat_rate","status":"active",
+             "area_name":"شارع شريف","meter_no":null,"exempt":false,"exempt_reason":null,"flat_fee":"60.00",
+             "maintenance_fee":"0.00","discount_percent":"0.00","balance":"25.00","credit":"0.00",
+             "unpaid_months":[],"unpaid_months_count":0,"period_invoiced":true,"reading_done":false,
+             "reading_value":null,"reading_estimated":false,"previous_value":"0.00",
+             "bills":[{"id":3,"number":"INV-2026-10-0001","period":"2026-10","label":"تشرين الأول 2026",
+               "type":"flat_rate","total":"60.00","paid":"35.00","remaining":"25.00","consumption":null,
+               "discount":"0.00","subsidy":"0.00"}],
+             "payments":[
+               {"id":41,"number":"PAY-2026-10-0009","amount":"20.00","method":"cash_usd",
+                "method_label":"نقداً دولار","collected_on":"2026-10-06","created_at":"2026-10-06T10:00:00+03:00",
+                "collector":"سليم ميعاري","note":null,"lbp_amount":null,"lbp_rate":null,
+                "settled":[{"period":"2026-10","label":"تشرين الأول 2026","amount":"20.00"}]},
+               {"id":40,"number":"PAY-2026-10-0008","amount":"15.00","method":"cash_lbp",
+                "method_label":"نقداً ليرة","collected_on":"2026-10-05","created_at":"2026-10-05T09:00:00+03:00",
+                "collector":"سليم ميعاري","note":"باقي الشهر","lbp_amount":1350000,"lbp_rate":90000.0,
+                "settled":[]}]}}
+            """.trimIndent()
+
+        val house = MotoApi.parseHouseBody(body)!!
+
+        assertEquals(2, house.payments.size)
+        assertEquals("20.00", house.payments[0].amount)
+        assertEquals("تشرين الأول 2026", house.payments[0].settled[0].label)
+        assertEquals("20.00", house.payments[0].settled[0].amount)
+        assertEquals("سليم ميعاري", house.payments[0].collector)
+
+        // A receipt that cleared nothing yet is still a receipt: it is money the office holds.
+        assertEquals(0, house.payments[1].settled.size)
+        assertEquals(1350000, house.payments[1].lbpAmount)
+        assertEquals("باقي الشهر", house.payments[1].note)
+
+        // The invoice log rides with it: the file answers «الفواتير ودفعاتها» in one read.
+        assertEquals("35.00", house.bills[0].paid)
+        assertEquals("25.00", house.bills[0].remaining)
+    }
+
+    @Test
+    fun `a file written before the receipts log existed still reads`() {
+        // What the phone holds from an older answer (or an old offline copy): no `payments` key at all.
+        val body = """
+            {"house":{"id":7,"name":"بيت بلا سجل","phone":null,"type":"flat_rate","status":"active",
+             "area_name":"شارع شريف","meter_no":null,"exempt":false,"exempt_reason":null,"flat_fee":"60.00",
+             "maintenance_fee":"0.00","discount_percent":"0.00","balance":"0.00","credit":"0.00",
+             "unpaid_months":[],"unpaid_months_count":0,"period_invoiced":true,"reading_done":false,
+             "reading_value":null,"reading_estimated":false,"previous_value":"0.00"}}
+            """.trimIndent()
+
+        // «لا دفعات بعد» must be sayable — an absent log is an empty one, never a crash.
+        assertEquals(0, MotoApi.parseHouseBody(body)!!.payments.size)
+    }
+
+    @Test
     fun `the signed-in account parses with its role`() {
         val user = MotoApi.parseUser(JSONObject(meBody).getJSONObject("user"))
 

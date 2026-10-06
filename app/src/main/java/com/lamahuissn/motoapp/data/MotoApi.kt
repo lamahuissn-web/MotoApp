@@ -505,7 +505,44 @@ object MotoApi {
         readingEstimated = row.optBoolean("reading_estimated"),
         previousValue = row.optString("previous_value"),
         bills = row.optJSONArray("bills").toBills(),
+        payments = row.optJSONArray("payments").toReceipts(),
     )
+
+    private fun JSONArray?.toReceipts(): List<HouseReceipt> {
+        if (this == null) return emptyList()
+
+        return (0 until length()).map { parseReceipt(getJSONObject(it)) }
+    }
+
+    /** One receipt from a household's log: what changed hands, and what it cleared. */
+    fun parseReceipt(row: JSONObject): HouseReceipt {
+        val settled = row.optJSONArray("settled")
+
+        return HouseReceipt(
+            id = row.optInt("id"),
+            number = row.optString("number").takeIf { it.isNotEmpty() && it != "null" },
+            amount = row.optString("amount"),
+            method = row.optString("method"),
+            methodLabel = row.optString("method_label").takeIf { it.isNotEmpty() && it != "null" },
+            collectedOn = row.optString("collected_on").takeIf { it.isNotEmpty() && it != "null" },
+            collector = row.optString("collector").takeIf { it.isNotEmpty() && it != "null" },
+            note = row.optString("note").takeIf { it.isNotEmpty() && it != "null" },
+            lbpAmount = row.optInt("lbp_amount").takeIf { !row.isNull("lbp_amount") },
+            settled = if (settled == null) {
+                emptyList()
+            } else {
+                (0 until settled.length()).map { i ->
+                    val line = settled.getJSONObject(i)
+
+                    SettledLine(
+                        period = line.optString("period").takeIf { it.isNotEmpty() && it != "null" },
+                        label = line.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+                        amount = line.optString("amount"),
+                    )
+                }
+            },
+        )
+    }
 
     private fun JSONArray?.toBills(): List<BillLine> {
         if (this == null) return emptyList()

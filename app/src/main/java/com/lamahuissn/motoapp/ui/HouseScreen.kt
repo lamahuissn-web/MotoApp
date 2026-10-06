@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.House
+import com.lamahuissn.motoapp.data.HouseReceipt
+import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.ui.theme.Green
 
 /** What the collector is looking at inside one household. */
@@ -97,8 +101,15 @@ fun HouseScreen(
     onOpenQueue: () -> Unit = {},
     refreshing: Boolean = false,
     onPullRefresh: () -> Unit = {},
+    canReverse: Boolean = false,
+    reversal: Load<ReversalAnswer> = Load.Idle,
+    onReverse: (paymentId: Int, reason: String) -> Unit = { _, _ -> },
+    onCloseReversal: () -> Unit = {},
 ) {
     val house = (load as? Load.Ready)?.value
+    // The receipt a manager is taking back (spec 009, phase C). Only a manager ever sets this: the button
+    // that opens it is not drawn for a collector, and the route refuses him even if it were.
+    var reversalFor by remember { mutableStateOf<ReceiptFace?>(null) }
     val context = LocalContext.current
     val scroll = rememberScrollState()
 
@@ -329,8 +340,20 @@ fun HouseScreen(
 
                                 else -> OverviewPanel(
                                     house = entry,
+                                    canReverse = canReverse,
                                     onGoCollect = { view = VIEW_PAYMENT },
                                     onGoReading = { view = VIEW_READING },
+                                    onReverse = { receipt ->
+                                        onCloseReversal()
+                                        reversalFor = ReceiptFace(
+                                            id = receipt.id,
+                                            amount = receipt.amount,
+                                            number = receipt.number,
+                                            collector = receipt.collector,
+                                            collectedOn = receipt.collectedOn,
+                                            house = entry.name,
+                                        )
+                                    },
                                 )
                             }
                         }
@@ -344,6 +367,18 @@ fun HouseScreen(
                 }
             }
         }
+    }
+
+    reversalFor?.let { receipt ->
+        ReversalDialog(
+            receipt = receipt,
+            load = reversal,
+            onConfirm = { reason -> onReverse(receipt.id, reason) },
+            onClose = {
+                reversalFor = null
+                onCloseReversal()
+            },
+        )
     }
 }
 
@@ -499,7 +534,13 @@ private fun BalanceCard(house: House) {
 
 /** The panel's overview: the this-cycle invoice, its lines, its total, and the way to collect. */
 @Composable
-private fun OverviewPanel(house: House, onGoCollect: () -> Unit, onGoReading: () -> Unit) {
+private fun OverviewPanel(
+    house: House,
+    canReverse: Boolean,
+    onGoCollect: () -> Unit,
+    onGoReading: () -> Unit,
+    onReverse: (HouseReceipt) -> Unit,
+) {
     val bill = house.bills.lastOrNull()
 
     if (bill == null) {
@@ -614,12 +655,22 @@ private fun OverviewPanel(house: House, onGoCollect: () -> Unit, onGoReading: ()
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 house.bills.reversed().forEach { line ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = line.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = line.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+
+                            // An invoice log that shows only what was billed says nothing about what was
+                            // PAID on it — and «الفواتير ودفعاتها» is one question, not two.
+                            if (line.remaining != "0.00") {
+                                MicroLabel(
+                                    stringResource(R.string.receipt_remaining_line, Money.usd(line.remaining)),
+                                    tone = Tone.Danger,
+                                )
+                            }
+                        }
                         Amount(
                             value = Money.usd(line.total),
                             tone = Tone.Neutral,
@@ -633,6 +684,84 @@ private fun OverviewPanel(house: House, onGoCollect: () -> Unit, onGoReading: ()
                                 .background(toneInk(billStatusTone(line.remaining, line.paid))),
                         )
                     }
+                }
+            }
+        }
+    }
+
+    // The household's receipts (spec 009, phase D): what a collector needs at the door to answer «أنت دفعت
+    // الشهر الماضي», and what a manager reads before taking one back. Newest first, as the panel lists them.
+    SectionHeading(stringResource(R.string.house_receipts))
+
+    if (house.payments.isEmpty()) {
+        MotoCard(padding = 14.dp) {
+            Text(
+                text = stringResource(R.string.house_no_receipts),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        return
+    }
+
+    MotoCard(padding = 14.dp) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            house.payments.forEachIndexed { index, receipt ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = listOfNotNull(receipt.collectedOn, receipt.collector)
+                                    .joinToString(" · "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (receipt.number != null) {
+                                MicroLabel(receipt.number)
+                            }
+                        }
+
+                        Amount(value = Money.usd(receipt.amount), style = MaterialTheme.typography.titleSmall)
+
+                        if (canReverse) {
+                            // The receipt's own log is where a manager takes one back: here he sees the whole
+                            // story around it, which a row in the day's list cannot show him.
+                            TextButton(
+                                onClick = { onReverse(receipt) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.reversal_action),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                    }
+
+                    // What this receipt cleared — the line a household disputes.
+                    receipt.settled.forEach { cleared ->
+                        Text(
+                            text = stringResource(
+                                R.string.receipt_settled_line,
+                                cleared.label ?: cleared.period.orEmpty(),
+                                Money.usd(cleared.amount),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    if (receipt.lbpAmount != null && receipt.lbpAmount != 0) {
+                        MicroLabel(Money.lira(receipt.lbpAmount.toLong()))
+                    }
+
+                    receipt.note?.let { MicroLabel(it) }
+                }
+
+                if (index != house.payments.lastIndex) {
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }

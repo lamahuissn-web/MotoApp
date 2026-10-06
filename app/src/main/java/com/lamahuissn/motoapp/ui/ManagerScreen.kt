@@ -78,7 +78,7 @@ fun ManagerScreen(
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
     var handoverFor by remember { mutableStateOf<ManagerCollector?>(null) }
-    var reversalFor by remember { mutableStateOf<RecentPayment?>(null) }
+    var reversalFor by remember { mutableStateOf<ReceiptFace?>(null) }
 
     Column(
         modifier = Modifier
@@ -285,7 +285,14 @@ fun ManagerScreen(
                                         // A new sheet starts from the office's last word, never from the
                                         // previous receipt's answer.
                                         onCloseReversal()
-                                        reversalFor = payment
+                                        reversalFor = ReceiptFace(
+                                            id = payment.id,
+                                            amount = payment.amount,
+                                            number = payment.number,
+                                            collector = payment.collector,
+                                            collectedOn = payment.collectedOn,
+                                            house = payment.subscriber.orEmpty(),
+                                        )
                                     },
                                 )
                             }
@@ -341,118 +348,6 @@ fun ManagerScreen(
             onClose = {
                 reversalFor = null
                 onCloseReversal()
-            },
-        )
-    }
-}
-
-/**
- * A manager taking one receipt back (spec 009, phase C) — the most dangerous screen in this app.
- *
- * It draws twice on purpose. The first sheet names the receipt and asks WHY in writing; the second says, in
- * a sentence nobody can mistake, that the household will owe the money again and that there is no undo, and
- * only then does the request leave the phone. What the office answers is what stands: the amount that came
- * off the books and the household's new balance, both the office's figures — the phone never subtracts.
- */
-@Composable
-private fun ReversalDialog(
-    receipt: RecentPayment,
-    load: Load<ReversalAnswer>,
-    onConfirm: (reason: String) -> Unit,
-    onClose: () -> Unit,
-) {
-    var reason by rememberSaveable(receipt.id) { mutableStateOf("") }
-    var confirming by rememberSaveable(receipt.id) { mutableStateOf(false) }
-
-    val busy = load is Load.Busy
-    val done = (load as? Load.Ready)?.value
-    val enough = reason.trim().length >= 10
-
-    AlertDialog(
-        onDismissRequest = { if (!busy) onClose() },
-        title = { Text(stringResource(R.string.reversal_title)) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(receipt.subscriber.orEmpty(), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
-                MicroLabel(
-                    listOfNotNull(receipt.collector, receipt.number, receipt.collectedOn).joinToString(" · "),
-                )
-                Spacer(Modifier.height(6.dp))
-                Amount(value = Money.usd(receipt.amount))
-
-                Spacer(Modifier.height(12.dp))
-
-                when {
-                    done != null -> {
-                        Alert(
-                            text = stringResource(R.string.reversal_recorded, Money.usd(done.amount)),
-                            tone = Tone.Success,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        MicroLabel(
-                            stringResource(R.string.reversal_balance_after, Money.usd(done.subscriberBalance)),
-                        )
-                    }
-
-                    else -> {
-                        FieldBox(
-                            label = stringResource(R.string.reversal_reason_label),
-                            value = reason,
-                            onChange = { reason = it },
-                            keyboard = KeyboardType.Text,
-                            enabled = !busy,
-                        )
-
-                        if (!enough && reason.isNotEmpty()) {
-                            Spacer(Modifier.height(6.dp))
-                            MicroLabel(stringResource(R.string.reversal_reason_needed), tone = Tone.Danger)
-                        }
-
-                        if (load is Load.Failed) {
-                            Spacer(Modifier.height(8.dp))
-                            Alert(text = load.message.orEmpty(), tone = Tone.Danger)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (done == null) {
-                TextButton(onClick = { confirming = true }, enabled = enough && !busy) {
-                    Text(stringResource(R.string.reversal_confirm))
-                }
-            } else {
-                TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
-            }
-        },
-        dismissButton = {
-            if (done == null) {
-                TextButton(onClick = onClose, enabled = !busy) { Text(stringResource(R.string.cancel)) }
-            }
-        },
-    )
-
-    if (confirming) {
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            title = { Text(stringResource(R.string.reversal_second_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.reversal_second_text,
-                        Money.usd(receipt.amount),
-                        receipt.subscriber.orEmpty(),
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { confirming = false; onConfirm(reason.trim()) }) {
-                    Text(stringResource(R.string.reversal_second_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,6 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +62,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
+import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.ui.theme.AmberInk
 import com.lamahuissn.motoapp.ui.theme.BlueInk
 import com.lamahuissn.motoapp.ui.theme.DangerInk
@@ -822,5 +828,133 @@ fun FieldBox(
                 },
             )
         }
+    }
+}
+
+/**
+ * A receipt as the reversal dialog needs it.
+ *
+ * Two screens take receipts back and read from different lists — the manager's board carries the last few of
+ * the day, a household's file carries his own log — so the dialog takes the fields it draws rather than
+ * either list's type.
+ */
+data class ReceiptFace(
+    val id: Int,
+    val amount: String,
+    val number: String?,
+    val collector: String?,
+    val collectedOn: String?,
+    val house: String,
+)
+
+/**
+ * Taking one receipt back (spec 009, phase C) — the most dangerous screen in this app.
+ *
+ * It draws twice on purpose. The first sheet names the receipt and asks WHY in writing; the second says, in a
+ * sentence nobody can mistake, that the household will owe the money again and that there is no undo, and
+ * only then does the request leave the phone. What the office answers is what stands: the amount that came
+ * off the books and the household's new balance, both the office's figures — the phone never subtracts.
+ */
+@Composable
+fun ReversalDialog(
+    receipt: ReceiptFace,
+    load: Load<ReversalAnswer>,
+    onConfirm: (reason: String) -> Unit,
+    onClose: () -> Unit,
+) {
+    var reason by rememberSaveable(receipt.id) { mutableStateOf("") }
+    var confirming by rememberSaveable(receipt.id) { mutableStateOf(false) }
+
+    val busy = load is Load.Busy
+    val done = (load as? Load.Ready)?.value
+    val enough = reason.trim().length >= 10
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onClose() },
+        title = { Text(stringResource(R.string.reversal_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(receipt.house, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                MicroLabel(
+                    listOfNotNull(receipt.collector, receipt.number, receipt.collectedOn).joinToString(" · "),
+                )
+                Spacer(Modifier.height(6.dp))
+                Amount(value = Money.usd(receipt.amount))
+
+                Spacer(Modifier.height(12.dp))
+
+                when {
+                    done != null -> {
+                        Alert(
+                            text = stringResource(R.string.reversal_recorded, Money.usd(done.amount)),
+                            tone = Tone.Success,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        MicroLabel(
+                            stringResource(R.string.reversal_balance_after, Money.usd(done.subscriberBalance)),
+                        )
+                    }
+
+                    else -> {
+                        FieldBox(
+                            label = stringResource(R.string.reversal_reason_label),
+                            value = reason,
+                            onChange = { reason = it },
+                            keyboard = KeyboardType.Text,
+                            enabled = !busy,
+                        )
+
+                        if (!enough && reason.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            MicroLabel(stringResource(R.string.reversal_reason_needed), tone = Tone.Danger)
+                        }
+
+                        if (load is Load.Failed) {
+                            Spacer(Modifier.height(8.dp))
+                            Alert(text = load.message.orEmpty(), tone = Tone.Danger)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (done == null) {
+                TextButton(onClick = { confirming = true }, enabled = enough && !busy) {
+                    Text(stringResource(R.string.reversal_confirm))
+                }
+            } else {
+                TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
+            }
+        },
+        dismissButton = {
+            if (done == null) {
+                TextButton(onClick = onClose, enabled = !busy) { Text(stringResource(R.string.cancel)) }
+            }
+        },
+    )
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(stringResource(R.string.reversal_second_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.reversal_second_text,
+                        Money.usd(receipt.amount),
+                        receipt.house,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirming = false; onConfirm(reason.trim()) }) {
+                    Text(stringResource(R.string.reversal_second_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 }

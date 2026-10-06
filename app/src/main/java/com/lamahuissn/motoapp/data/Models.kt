@@ -202,6 +202,13 @@ data class House(
     val previousValue: String,
     /** Only the house detail carries the invoices; the cards in a list do not. */
     val bills: List<BillLine> = emptyList(),
+    /**
+     * The household's receipts, newest first — only the file carries them (spec 009, phase D).
+     *
+     * This is the log a person reads before deciding anything about a house: what he paid, when, who took it,
+     * and which months it cleared. Empty for a house that never paid, and empty on the cards in a list.
+     */
+    val payments: List<HouseReceipt> = emptyList(),
 ) {
     val isMetered: Boolean get() = type == "metered"
     val isFlat: Boolean get() = type == "flat_rate"
@@ -215,6 +222,28 @@ data class House(
 }
 
 data class UnpaidMonth(val period: String, val label: String, val remaining: String, val type: String)
+
+/** What one receipt cleared, month by month — what a household disputes. */
+data class SettledLine(val period: String?, val label: String?, val amount: String)
+
+/**
+ * One receipt in a household's file (spec 009, phase D).
+ *
+ * Everything here comes from the office as text: the amount was never the phone's to read as a number, and
+ * the lira was handed over at the rate stored on this very receipt — never re-converted at today's.
+ */
+data class HouseReceipt(
+    val id: Int,
+    val number: String?,
+    val amount: String,
+    val method: String,
+    val methodLabel: String?,
+    val collectedOn: String?,
+    val collector: String?,
+    val note: String?,
+    val lbpAmount: Int?,
+    val settled: List<SettledLine> = emptyList(),
+)
 
 /** One invoice as the house detail carries it. */
 data class BillLine(

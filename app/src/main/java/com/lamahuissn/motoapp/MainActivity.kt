@@ -119,6 +119,7 @@ private fun MotoApp(model: MotoViewModel) {
     val staleAsOf by model.staleAsOf.collectAsState()
     val refreshing by model.refreshing.collectAsState()
     val queue by model.queue.collectAsState()
+    val reversal by model.reversal.collectAsState()
 
     // The phone should be able to tell him, unopened, that his recorded work has not reached the office
     // (spec 010). Asked once, from Android 13 up; a refusal costs the notifications and nothing else.
@@ -233,13 +234,17 @@ private fun MotoApp(model: MotoViewModel) {
                 onOpenQueue = model::openQueue,
                 refreshing = refreshing,
                 onPullRefresh = model::refresh,
+                // Only a manager's phone draws the way into a reversal; a collector's file is a reading.
+                canReverse = session?.user?.isAdmin == true,
+                reversal = reversal,
+                onReverse = model::reverseReceipt,
+                onCloseReversal = model::clearReversal,
             )
         }
 
         Screen.Manager -> {
             val manager by model.manager.collectAsState()
             val handover by model.handover.collectAsState()
-            val reversal by model.reversal.collectAsState()
 
             ManagerScreen(
                 userName = session?.user?.name.orEmpty(),

@@ -416,7 +416,11 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
             when (call) {
                 is ApiCall.Success -> {
                     _reversal.value = Load.Ready(call.value)
-                    readManager()
+
+                    // A reversal changes what the household owes, so wherever the manager is standing is
+                    // re-read: the file he reversed from, and his board when that is what is behind him.
+                    loadHouse()
+                    if (_session.value?.user?.isAdmin == true) readManager()
                 }
 
                 else -> _reversal.value = Load.Failed(problem(call).message)
