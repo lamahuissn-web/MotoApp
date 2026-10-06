@@ -289,6 +289,17 @@
     <string name="mgr_recent">آخر العمليات</string>
     <string name="mgr_open_areas">شبكة المناطق</string>
     <string name="handover_title">تسجيل تسليم نقد</string>
+    <!-- المرحلة (ج): عكس إيصال من هاتف المدير — أخطر كتابة في التطبيق، ولذلك السبب مكتوب والتأكيد مرّتان. -->
+    <string name="reversal_action">عكس</string>
+    <string name="reversal_title">عكس إيصال</string>
+    <string name="reversal_reason_label">سبب العكس — يبقى في سجل التدقيق</string>
+    <string name="reversal_reason_needed">اكتب سبباً واضحاً (10 خانات على الأقل) قبل العكس.</string>
+    <string name="reversal_confirm">عكس الإيصال</string>
+    <string name="reversal_second_title">تأكيد أخير — لا يمكن التراجع</string>
+    <string name="reversal_second_text">سيخرج الإيصال %1$s من دفاتر البيت «%2$s» ويعود عليه دَيناً. لا يمكن التراجع بعدها.</string>
+    <string name="reversal_second_confirm">نعم، اعكس الإيصال</string>
+    <string name="reversal_recorded">عُكس الإيصال: %1$s</string>
+    <string name="reversal_balance_after">رصيد البيت بعد العكس: %1$s</string>
     <string name="handover_in_hand_now">النقد بذمّته الآن</string>
     <string name="handover_amount">المبلغ المسلَّم</string>
     <string name="handover_date">تاريخ التسليم (YYYY-MM-DD)</string>

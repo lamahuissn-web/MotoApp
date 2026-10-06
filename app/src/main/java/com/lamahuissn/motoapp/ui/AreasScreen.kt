@@ -131,7 +131,7 @@ fun AreasScreen(
             // …and the same for the keyboard: the screen gives up exactly the room the keyboard takes,
             // so the field and its answers are never under it.
             .imePadding()
-            .navigationBarsPadding(),
+            // The bottom bar carries the navigation inset on this screen.
     ) {
         MotoAppBar(
             subtitle = stringResource(R.string.app_tagline),

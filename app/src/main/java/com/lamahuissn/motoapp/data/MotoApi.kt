@@ -152,6 +152,28 @@ object MotoApi {
             .toString(),
     ) { parseHandover(it) }
 
+    /**
+     * Take one receipt back (spec 009, phase C) — the most dangerous write this app makes.
+     *
+     * A written reason travels with it: it is what the audit trail will say in six months, and the desk
+     * reads the same trail. The reason is short of nothing else on the wire — no amount, no date: the
+     * receipt is named, and what it did to the books is the office's to decide and to undo.
+     */
+    suspend fun reversal(
+        token: String,
+        paymentId: Int,
+        reason: String,
+        key: String,
+    ): ApiCall<ReversalAnswer> = money(
+        endpoint = "manager/reversals",
+        token = token,
+        key = key,
+        body = JSONObject()
+            .put("payment_id", paymentId)
+            .put("reason", reason)
+            .toString(),
+    ) { parseReversal(it) }
+
     /** One house in full, with the invoices the office holds against it. */
     suspend fun house(token: String, subscriberId: Int, period: String? = null, sink: ((String) -> Unit)? = null): ApiCall<House> = call(
         Request.Builder().url("$baseUrl/api/v1/houses/$subscriberId${periodQuery(period)}").authorized(token).build(),
@@ -341,6 +363,21 @@ object MotoApi {
                 owes = hit.optBoolean("owes"),
             )
         }
+    }
+
+    fun parseReversal(body: String): ReversalAnswer? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val reversed = row.optJSONObject("reversed") ?: return null
+
+        return ReversalAnswer(
+            id = reversed.optInt("id"),
+            number = reversed.optString("number").takeIf { it.isNotEmpty() && it != "null" },
+            subscriberId = reversed.optInt("subscriber_id"),
+            amount = reversed.optString("amount"),
+            collector = reversed.optString("collector").takeIf { it.isNotEmpty() && it != "null" },
+            collectedOn = reversed.optString("collected_on").takeIf { it.isNotEmpty() && it != "null" },
+            subscriberBalance = row.optString("subscriber_balance"),
+        )
     }
 
     fun parseHandover(body: String): HandoverAnswer? {

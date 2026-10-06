@@ -98,6 +98,21 @@ data class HandoverAnswer(
     val collectorInHand: String,
 )
 
+/** A receipt that was taken back, as the office recorded it (spec 009, phase C). */
+data class ReversalAnswer(
+    val id: Int,
+    val number: String?,
+    val subscriberId: Int,
+    val amount: String,
+    val collector: String?,
+    val collectedOn: String?,
+    /**
+     * The household's balance after the receipt went, as the office computes it.
+     * Never the phone's: reversing a payment makes a house owe again, and the phone must not guess by how much.
+     */
+    val subscriberBalance: String,
+)
+
 /** One collector as the manager sees him: his day, his cycle, and the cash the office is waiting for. */
 data class ManagerCollector(
     val id: Int,

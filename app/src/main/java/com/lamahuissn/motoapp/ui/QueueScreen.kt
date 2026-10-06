@@ -75,7 +75,7 @@ fun QueueScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .imePadding()
-            .navigationBarsPadding(),
+            // The bottom bar carries the navigation inset on this screen.
     ) {
         MotoAppBar(
             subtitle = stringResource(R.string.queue_subtitle),

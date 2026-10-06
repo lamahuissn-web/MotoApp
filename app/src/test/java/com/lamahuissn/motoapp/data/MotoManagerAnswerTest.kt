@@ -1,6 +1,7 @@
 package com.lamahuissn.motoapp.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -128,6 +129,34 @@ class MotoManagerAnswerTest {
         assertEquals("نقد الأسبوع", answer.note)
         // The office's own figure for what is still held — the phone never subtracts to find it.
         assertEquals("35.00", answer.collectorInHand)
+    }
+
+    @Test
+    fun `a reversal answer carries what went and what the house owes now`() {
+        val answer = MotoApi.parseReversal(
+            """
+            {"reversed":{"id":41,"number":"PAY-2026-10-0007","subscriber_id":12,"amount":"25.00",
+             "collector_id":3,"collector":"سليم ميعاري","collected_on":"2026-10-06"},
+             "subscriber_balance":"55.00","replay":false}
+            """.trimIndent(),
+        )
+
+        assertNotNull(answer)
+        assertEquals(41, answer!!.id)
+        assertEquals("PAY-2026-10-0007", answer.number)
+        assertEquals("25.00", answer.amount)
+        assertEquals("سليم ميعاري", answer.collector)
+        assertEquals("2026-10-06", answer.collectedOn)
+        assertEquals(12, answer.subscriberId)
+
+        // The balance is the office's figure: the phone reads it and never works it out.
+        assertEquals("55.00", answer.subscriberBalance)
+    }
+
+    @Test
+    fun `a reversal answer with no receipt is refused, not guessed at`() {
+        assertNull(MotoApi.parseReversal("""{"subscriber_balance":"55.00"}"""))
+        assertNull(MotoApi.parseReversal("not json at all"))
     }
 
     @Test

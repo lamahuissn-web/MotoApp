@@ -44,6 +44,7 @@ import com.lamahuissn.motoapp.data.HandoverAnswer
 import com.lamahuissn.motoapp.data.ManagerBoard
 import com.lamahuissn.motoapp.data.ManagerCollector
 import com.lamahuissn.motoapp.data.RecentPayment
+import com.lamahuissn.motoapp.data.ReversalAnswer
 import java.time.LocalDate
 
 /**
@@ -71,9 +72,13 @@ fun ManagerScreen(
     handover: Load<HandoverAnswer> = Load.Idle,
     onHandover: (collectorId: Int, amount: String, date: String, note: String?) -> Unit = { _, _, _, _ -> },
     onCloseHandover: () -> Unit = {},
+    reversal: Load<ReversalAnswer> = Load.Idle,
+    onReverse: (paymentId: Int, reason: String) -> Unit = { _, _ -> },
+    onCloseReversal: () -> Unit = {},
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
     var handoverFor by remember { mutableStateOf<ManagerCollector?>(null) }
+    var reversalFor by remember { mutableStateOf<RecentPayment?>(null) }
 
     Column(
         modifier = Modifier
@@ -81,7 +86,7 @@ fun ManagerScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .imePadding()
-            .navigationBarsPadding(),
+            // The bottom bar carries the navigation inset on this screen.
     ) {
         MotoAppBar(
             subtitle = stringResource(R.string.mgr_subtitle),
@@ -273,7 +278,16 @@ fun ManagerScreen(
                             }
 
                             items(board.recentPayments, key = { it.id }) { payment ->
-                                PaymentRow(payment = payment, onOpen = onOpenHouse)
+                                PaymentRow(
+                                    payment = payment,
+                                    onOpen = onOpenHouse,
+                                    onReverse = {
+                                        // A new sheet starts from the office's last word, never from the
+                                        // previous receipt's answer.
+                                        onCloseReversal()
+                                        reversalFor = payment
+                                    },
+                                )
                             }
                         }
 
@@ -315,6 +329,130 @@ fun ManagerScreen(
             onClose = {
                 handoverFor = null
                 onCloseHandover()
+            },
+        )
+    }
+
+    reversalFor?.let { receipt ->
+        ReversalDialog(
+            receipt = receipt,
+            load = reversal,
+            onConfirm = { reason -> onReverse(receipt.id, reason) },
+            onClose = {
+                reversalFor = null
+                onCloseReversal()
+            },
+        )
+    }
+}
+
+/**
+ * A manager taking one receipt back (spec 009, phase C) — the most dangerous screen in this app.
+ *
+ * It draws twice on purpose. The first sheet names the receipt and asks WHY in writing; the second says, in
+ * a sentence nobody can mistake, that the household will owe the money again and that there is no undo, and
+ * only then does the request leave the phone. What the office answers is what stands: the amount that came
+ * off the books and the household's new balance, both the office's figures — the phone never subtracts.
+ */
+@Composable
+private fun ReversalDialog(
+    receipt: RecentPayment,
+    load: Load<ReversalAnswer>,
+    onConfirm: (reason: String) -> Unit,
+    onClose: () -> Unit,
+) {
+    var reason by rememberSaveable(receipt.id) { mutableStateOf("") }
+    var confirming by rememberSaveable(receipt.id) { mutableStateOf(false) }
+
+    val busy = load is Load.Busy
+    val done = (load as? Load.Ready)?.value
+    val enough = reason.trim().length >= 10
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onClose() },
+        title = { Text(stringResource(R.string.reversal_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(receipt.subscriber.orEmpty(), style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                MicroLabel(
+                    listOfNotNull(receipt.collector, receipt.number, receipt.collectedOn).joinToString(" · "),
+                )
+                Spacer(Modifier.height(6.dp))
+                Amount(value = Money.usd(receipt.amount))
+
+                Spacer(Modifier.height(12.dp))
+
+                when {
+                    done != null -> {
+                        Alert(
+                            text = stringResource(R.string.reversal_recorded, Money.usd(done.amount)),
+                            tone = Tone.Success,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        MicroLabel(
+                            stringResource(R.string.reversal_balance_after, Money.usd(done.subscriberBalance)),
+                        )
+                    }
+
+                    else -> {
+                        FieldBox(
+                            label = stringResource(R.string.reversal_reason_label),
+                            value = reason,
+                            onChange = { reason = it },
+                            keyboard = KeyboardType.Text,
+                            enabled = !busy,
+                        )
+
+                        if (!enough && reason.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            MicroLabel(stringResource(R.string.reversal_reason_needed), tone = Tone.Danger)
+                        }
+
+                        if (load is Load.Failed) {
+                            Spacer(Modifier.height(8.dp))
+                            Alert(text = load.message.orEmpty(), tone = Tone.Danger)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (done == null) {
+                TextButton(onClick = { confirming = true }, enabled = enough && !busy) {
+                    Text(stringResource(R.string.reversal_confirm))
+                }
+            } else {
+                TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
+            }
+        },
+        dismissButton = {
+            if (done == null) {
+                TextButton(onClick = onClose, enabled = !busy) { Text(stringResource(R.string.cancel)) }
+            }
+        },
+    )
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(stringResource(R.string.reversal_second_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.reversal_second_text,
+                        Money.usd(receipt.amount),
+                        receipt.subscriber.orEmpty(),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirming = false; onConfirm(reason.trim()) }) {
+                    Text(stringResource(R.string.reversal_second_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -509,7 +647,7 @@ private fun CollectorRow(collector: ManagerCollector, onOpen: () -> Unit) {
 
 /** One receipt, as the office recorded it — enough to recognise a line in the books. */
 @Composable
-private fun PaymentRow(payment: RecentPayment, onOpen: (id: Int) -> Unit) {
+private fun PaymentRow(payment: RecentPayment, onOpen: (id: Int) -> Unit, onReverse: () -> Unit) {
     MotoCard(onClick = { onOpen(payment.subscriberId) }, padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Tile(tone = Tone.Neutral, size = 36.dp) {
@@ -541,6 +679,15 @@ private fun PaymentRow(payment: RecentPayment, onOpen: (id: Int) -> Unit) {
             }
 
             Amount(value = Money.usd(payment.amount), style = MaterialTheme.typography.titleSmall)
+
+            // The one write reachable from this screen, and a small door on purpose: taking a receipt back
+            // must never be a stray thumb on the way to a house.
+            TextButton(
+                onClick = onReverse,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Text(stringResource(R.string.reversal_action), style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }

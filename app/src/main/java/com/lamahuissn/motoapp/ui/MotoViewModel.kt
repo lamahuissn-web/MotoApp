@@ -23,6 +23,7 @@ import com.lamahuissn.motoapp.data.QueueRunner
 import com.lamahuissn.motoapp.data.QueueState
 import com.lamahuissn.motoapp.data.QueuedWrite
 import com.lamahuissn.motoapp.data.ReadingAnswer
+import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.data.SearchHit
 import com.lamahuissn.motoapp.data.Session
 import com.lamahuissn.motoapp.data.TokenVault
@@ -164,6 +165,16 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val _handover = MutableStateFlow<Load<HandoverAnswer>>(Load.Idle)
     val handover: StateFlow<Load<HandoverAnswer>> = _handover.asStateFlow()
+
+    /**
+     * The manager taking a receipt back (spec 009, phase C) — the most dangerous write in this app.
+     *
+     * Nothing is queued here and nothing is retried by itself: the reason the manager typed travels with the
+     * request, the office's answer is the only thing that makes it true, and the phone never decides what a
+     * reversal did to a balance.
+     */
+    private val _reversal = MutableStateFlow<Load<ReversalAnswer>>(Load.Idle)
+    val reversal: StateFlow<Load<ReversalAnswer>> = _reversal.asStateFlow()
 
     /**
      * The writes the office has not seen yet (spec 010) — on disk before they are sent.
@@ -379,6 +390,42 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearHandover() {
         _handover.value = Load.Idle
+    }
+
+    /**
+     * Take one receipt back (spec 009, phase C).
+     *
+     * The reason is sent exactly as typed — it is the sentence the office will read in the trail. A refusal
+     * comes back in the office's own words (including «the money this receipt credited was already spent»),
+     * and the board is only re-read when the office says the receipt is gone.
+     */
+    fun reverseReceipt(paymentId: Int, reason: String) {
+        val token = _session.value?.token ?: return
+        if (_reversal.value is Load.Busy) return
+
+        _reversal.value = Load.Busy
+
+        viewModelScope.launch {
+            val call = MotoApi.reversal(
+                token = token,
+                paymentId = paymentId,
+                reason = reason.trim(),
+                key = AttemptKey.next(),
+            )
+
+            when (call) {
+                is ApiCall.Success -> {
+                    _reversal.value = Load.Ready(call.value)
+                    readManager()
+                }
+
+                else -> _reversal.value = Load.Failed(problem(call).message)
+            }
+        }
+    }
+
+    fun clearReversal() {
+        _reversal.value = Load.Idle
     }
 
     /**
@@ -901,6 +948,20 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 key = entry.key,
             )
         }
+    }
+
+    /**
+     * Back to the manager's board from wherever he is (the bottom bar's first door).
+     *
+     * It refreshes on the way in for the same reason the areas' back does: the figures he returns to
+     * should be the figures as they are, not as they were when he left.
+     */
+    fun openBoard() {
+        if (_session.value?.user?.isAdmin != true) return
+
+        queueOrigin = null
+        _screen.value = Screen.Manager
+        loadManager()
     }
 
     /**

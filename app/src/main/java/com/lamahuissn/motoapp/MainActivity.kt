@@ -9,9 +9,23 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -102,6 +118,7 @@ private fun MotoApp(model: MotoViewModel) {
     val problem by model.problem.collectAsState()
     val staleAsOf by model.staleAsOf.collectAsState()
     val refreshing by model.refreshing.collectAsState()
+    val queue by model.queue.collectAsState()
 
     // The phone should be able to tell him, unopened, that his recorded work has not reached the office
     // (spec 010). Asked once, from Android 13 up; a refusal costs the notifications and nothing else.
@@ -128,7 +145,14 @@ private fun MotoApp(model: MotoViewModel) {
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
 
-    when (val current = screen) {
+    // The bar is for the screens somebody lives in; a house, a sheet or the queue's own detail is a step
+    // under them, and a bar there would be a door back to where he already is.
+    val topLevel = screen is Screen.Areas || screen is Screen.Manager || screen is Screen.Queue
+    val owed = queue.count { it.isOpen }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) {
+            when (val current = screen) {
         Screen.Login -> LoginScreen(
             busy = busy,
             problem = problem,
@@ -138,7 +162,6 @@ private fun MotoApp(model: MotoViewModel) {
         Screen.Areas -> {
             val board by model.board.collectAsState()
             val search by model.search.collectAsState()
-            val queue by model.queue.collectAsState()
 
             AreasScreen(
                 userName = session?.user?.name.orEmpty(),
@@ -160,8 +183,6 @@ private fun MotoApp(model: MotoViewModel) {
         }
 
         Screen.Queue -> {
-            val queue by model.queue.collectAsState()
-
             QueueScreen(
                 records = queue,
                 busy = busy,
@@ -194,7 +215,6 @@ private fun MotoApp(model: MotoViewModel) {
             val house by model.house.collectAsState()
             val outcome by model.outcome.collectAsState()
             val rate by model.lbpRate.collectAsState()
-            val queue by model.queue.collectAsState()
 
             HouseScreen(
                 load = house,
@@ -219,6 +239,7 @@ private fun MotoApp(model: MotoViewModel) {
         Screen.Manager -> {
             val manager by model.manager.collectAsState()
             val handover by model.handover.collectAsState()
+            val reversal by model.reversal.collectAsState()
 
             ManagerScreen(
                 userName = session?.user?.name.orEmpty(),
@@ -233,6 +254,85 @@ private fun MotoApp(model: MotoViewModel) {
                 handover = handover,
                 onHandover = model::recordHandover,
                 onCloseHandover = model::clearHandover,
+                reversal = reversal,
+                onReverse = model::reverseReceipt,
+                onCloseReversal = model::clearReversal,
+            )
+        }
+            }
+        }
+
+        if (topLevel) {
+            MotoBottomBar(
+                manager = session?.user?.isAdmin == true,
+                current = screen,
+                owed = owed,
+                onManager = model::openBoard,
+                onAreas = model::openAreas,
+                onQueue = model::openQueue,
+            )
+        }
+    }
+}
+
+/**
+ * The two or three doors every signed-in user should have under his thumb.
+ *
+ * It exists for a reason the app was missing: «الطابور» was reachable only through a card that appears
+ * when something is owed, so a collector who wanted to look at it — or a manager who wanted it from his
+ * board — had no way in at all. A manager also gets his board as a door rather than only the button at the
+ * bottom of the areas screen.
+ *
+ * It is drawn on the screens somebody lives in, never over a house or an area sheet.
+ */
+@Composable
+private fun MotoBottomBar(
+    manager: Boolean,
+    current: Screen,
+    owed: Int,
+    onManager: () -> Unit,
+    onAreas: () -> Unit,
+    onQueue: () -> Unit,
+) {
+    Column {
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            modifier = Modifier.navigationBarsPadding(),
+        ) {
+            if (manager) {
+                NavigationBarItem(
+                    selected = current is Screen.Manager,
+                    onClick = onManager,
+                    icon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
+                    label = { Text(stringResource(R.string.mgr_subtitle)) },
+                )
+            }
+
+            NavigationBarItem(
+                selected = current is Screen.Areas,
+                onClick = onAreas,
+                icon = { Icon(Icons.Filled.Place, contentDescription = null) },
+                label = { Text(stringResource(R.string.areas_section)) },
+            )
+
+            NavigationBarItem(
+                selected = current is Screen.Queue,
+                onClick = onQueue,
+                icon = {
+                    // What is owed rides on the door itself: the one fact a man holding cash must not have
+                    // to open a screen to remember.
+                    if (owed > 0) {
+                        BadgedBox(badge = { Badge { Text(owed.toString()) } }) {
+                            Icon(Icons.Filled.CloudOff, contentDescription = null)
+                        }
+                    } else {
+                        Icon(Icons.Filled.CloudOff, contentDescription = null)
+                    }
+                },
+                label = { Text(stringResource(R.string.queue_subtitle)) },
             )
         }
     }
