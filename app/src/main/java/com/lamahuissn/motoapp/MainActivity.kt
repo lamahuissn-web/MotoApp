@@ -61,6 +61,7 @@ private fun MotoApp(model: MotoViewModel) {
     val busy by model.busy.collectAsState()
     val problem by model.problem.collectAsState()
     val staleAsOf by model.staleAsOf.collectAsState()
+    val refreshing by model.refreshing.collectAsState()
 
     // The phone's own back button walks the same journey the arrows do. On a home screen it stays
     // disabled, so the system ends the app the way the user expects instead of us swallowing the press.
@@ -97,6 +98,8 @@ private fun MotoApp(model: MotoViewModel) {
                 queue = queue,
                 onOpenQueue = model::openQueue,
                 staleAsOf = staleAsOf,
+                refreshing = refreshing,
+                onPullRefresh = model::refresh,
                 onBack = if (session?.user?.isAdmin == true) model::backFromAreas else null,
             )
         }
@@ -111,6 +114,8 @@ private fun MotoApp(model: MotoViewModel) {
                 onDiscard = model::discard,
                 onBack = model::backFromQueue,
                 onSignOut = model::signOut,
+                refreshing = refreshing,
+                onPullRefresh = model::refresh,
             )
         }
 
@@ -125,6 +130,8 @@ private fun MotoApp(model: MotoViewModel) {
                 onRetry = { model.loadSheet(current.areaId) },
                 onOpenHouse = model::openHouse,
                 staleAsOf = staleAsOf,
+                refreshing = refreshing,
+                onPullRefresh = model::refresh,
             )
         }
 
@@ -149,6 +156,8 @@ private fun MotoApp(model: MotoViewModel) {
                 staleAsOf = staleAsOf,
                 queueOwed = queue.count { it.isOpen },
                 onOpenQueue = model::openQueue,
+                refreshing = refreshing,
+                onPullRefresh = model::refresh,
             )
         }
 
@@ -163,6 +172,8 @@ private fun MotoApp(model: MotoViewModel) {
                 onOpenAreas = model::openAreas,
                 onSignOut = model::signOut,
                 onOpenHouse = model::openHouseById,
+                refreshing = refreshing,
+                onPullRefresh = model::refresh,
             )
         }
     }

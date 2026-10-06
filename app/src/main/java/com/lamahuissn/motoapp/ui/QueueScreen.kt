@@ -60,6 +60,8 @@ fun QueueScreen(
     onDiscard: (QueuedWrite) -> Unit,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var discarding by remember { mutableStateOf<QueuedWrite?>(null) }
@@ -82,75 +84,80 @@ fun QueueScreen(
             onBack = onBack,
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        PullToRefresh(
+            refreshing = refreshing,
+            onRefresh = onPullRefresh,
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.queue_title),
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = if (owed == 0) {
-                                stringResource(R.string.queue_all_settled)
-                            } else {
-                                pluralStringResource(R.plurals.queue_owed, owed, owed)
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.queue_title),
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = if (owed == 0) {
+                                    stringResource(R.string.queue_all_settled)
+                                } else {
+                                    pluralStringResource(R.plurals.queue_owed, owed, owed)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
 
-                    if (owed > 0) {
-                        Badge(text = owed.toString(), tone = Tone.Warning, size = BadgeSize.Large)
+                        if (owed > 0) {
+                            Badge(text = owed.toString(), tone = Tone.Warning, size = BadgeSize.Large)
+                        }
                     }
                 }
-            }
 
-            if (owed > 0) {
-                item {
-                    OutlineButton(
-                        text = stringResource(R.string.queue_send_now),
-                        onClick = onSend,
-                        modifier = Modifier.fillMaxWidth(),
-                        tone = Tone.Primary,
+                if (owed > 0) {
+                    item {
+                        OutlineButton(
+                            text = stringResource(R.string.queue_send_now),
+                            onClick = onSend,
+                            modifier = Modifier.fillMaxWidth(),
+                            tone = Tone.Primary,
+                        )
+                    }
+                }
+
+                if (busy) {
+                    item { BusyBox(Modifier.padding(vertical = 24.dp)) }
+                }
+
+                if (records.isEmpty()) {
+                    item {
+                        MotoCard {
+                            Text(
+                                text = stringResource(R.string.queue_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                // What is still owed comes first: it is the part that needs the collector's attention.
+                items(records.sortedByDescending { it.isOpen }, key = { it.key }) { record ->
+                    QueueRow(
+                        record = record,
+                        onDiscard = { discarding = record },
+                        onShare = { shareReceipt(context, it) },
                     )
                 }
-            }
 
-            if (busy) {
-                item { BusyBox(Modifier.padding(vertical = 24.dp)) }
-            }
-
-            if (records.isEmpty()) {
-                item {
-                    MotoCard {
-                        Text(
-                            text = stringResource(R.string.queue_empty),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                if (settled > 0 && owed > 0) {
+                    item {
+                        MicroLabel(stringResource(R.string.queue_settled_hint, settled))
                     }
-                }
-            }
-
-            // What is still owed comes first: it is the part that needs the collector's attention.
-            items(records.sortedByDescending { it.isOpen }, key = { it.key }) { record ->
-                QueueRow(
-                    record = record,
-                    onDiscard = { discarding = record },
-                    onShare = { shareReceipt(context, it) },
-                )
-            }
-
-            if (settled > 0 && owed > 0) {
-                item {
-                    MicroLabel(stringResource(R.string.queue_settled_hint, settled))
                 }
             }
         }

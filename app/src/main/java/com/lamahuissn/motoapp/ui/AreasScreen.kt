@@ -93,6 +93,8 @@ fun AreasScreen(
     queue: List<QueuedWrite> = emptyList(),
     onOpenQueue: () -> Unit = {},
     staleAsOf: String? = null,
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
     onBack: (() -> Unit)? = null,
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
@@ -183,102 +185,106 @@ fun AreasScreen(
                         )
                     }
 
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        state = listState,
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    PullToRefresh(
+                        refreshing = refreshing,
+                        onRefresh = onPullRefresh,
                     ) {
-                        if (!searchMode) {
-                            item { Greeting(userName = userName, period = board.label) }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            state = listState,
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            if (!searchMode) {
+                                item { Greeting(userName = userName, period = board.label) }
 
-                            // Anything the office has not answered about yet is the FIRST thing on the
-                            // day: a collector who cannot tell «the office has my money» from «my phone
-                            // has my money» will stop trusting either (spec 010).
-                            if (owed.isNotEmpty()) {
-                                item { QueueCard(owed = owed.size, onOpen = onOpenQueue) }
+                                // Anything the office has not answered about yet is the FIRST thing on the
+                                // day: a collector who cannot tell «the office has my money» from «my phone
+                                // has my money» will stop trusting either (spec 010).
+                                if (owed.isNotEmpty()) {
+                                    item { QueueCard(owed = owed.size, onOpen = onOpenQueue) }
+                                }
+
+                                // The web dashboard's first row: what he took today and what he has taken
+                                // this month — the collector's own money, summed by the office, never by the
+                                // phone.
+                                board.stats?.let { stats ->
+                                    item { MoneyRow(stats) }
+                                }
+
+                                item { ShiftCounts(board) }
+
+                                board.stats?.let { stats ->
+                                    item { CashInHand(stats) }
+                                }
                             }
 
-                            // The web dashboard's first row: what he took today and what he has taken
-                            // this month — the collector's own money, summed by the office, never by the
-                            // phone.
-                            board.stats?.let { stats ->
-                                item { MoneyRow(stats) }
+                            if (searching) {
+                            item {
+                                SectionHeading(
+                                    text = stringResource(R.string.search_results),
+                                    trailing = if (search is Load.Ready) {
+                                        (search as Load.Ready).value.size.toString()
+                                    } else {
+                                        null
+                                    },
+                                )
                             }
 
-                            item { ShiftCounts(board) }
+                            when (search) {
+                                Load.Idle, Load.Busy -> item { BusyBox() }
 
-                            board.stats?.let { stats ->
-                                item { CashInHand(stats) }
-                            }
-                        }
+                                is Load.Failed -> item {
+                                    Alert(text = stringResource(R.string.problem_unreachable), tone = Tone.Danger)
+                                }
 
-                        if (searching) {
-                        item {
-                            SectionHeading(
-                                text = stringResource(R.string.search_results),
-                                trailing = if (search is Load.Ready) {
-                                    (search as Load.Ready).value.size.toString()
-                                } else {
-                                    null
-                                },
-                            )
-                        }
-
-                        when (search) {
-                            Load.Idle, Load.Busy -> item { BusyBox() }
-
-                            is Load.Failed -> item {
-                                Alert(text = stringResource(R.string.problem_unreachable), tone = Tone.Danger)
-                            }
-
-                            is Load.Ready -> {
-                                if (search.value.isEmpty()) {
-                                    item { Alert(text = stringResource(R.string.search_empty), tone = Tone.Neutral) }
-                                } else {
-                                    items(search.value, key = { it.id }) { hit ->
-                                        SearchRow(hit = hit, onOpen = { onOpenHit(hit) })
+                                is Load.Ready -> {
+                                    if (search.value.isEmpty()) {
+                                        item { Alert(text = stringResource(R.string.search_empty), tone = Tone.Neutral) }
+                                    } else {
+                                        items(search.value, key = { it.id }) { hit ->
+                                            SearchRow(hit = hit, onOpen = { onOpenHit(hit) })
+                                        }
                                     }
                                 }
                             }
-                        }
-                    } else {
-                        item {
-                            SectionHeading(
-                                text = stringResource(R.string.areas_section),
-                                trailing = pluralStringResource(
-                                    R.plurals.areas_count,
-                                    board.areas.size,
-                                    board.areas.size,
-                                ),
-                            )
-                        }
-
-                        if (board.areas.isEmpty()) {
+                        } else {
                             item {
-                                MotoCard {
-                                    Text(
-                                        text = stringResource(R.string.areas_empty),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                SectionHeading(
+                                    text = stringResource(R.string.areas_section),
+                                    trailing = pluralStringResource(
+                                        R.plurals.areas_count,
+                                        board.areas.size,
+                                        board.areas.size,
+                                    ),
+                                )
+                            }
+
+                            if (board.areas.isEmpty()) {
+                                item {
+                                    MotoCard {
+                                        Text(
+                                            text = stringResource(R.string.areas_empty),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        items(board.areas, key = { it.name }) { area ->
-                            AreaRow(area = area, onOpen = { onOpen(area) })
+                            items(board.areas, key = { it.name }) { area ->
+                                AreaRow(area = area, onOpen = { onOpen(area) })
+                            }
                         }
-                    }
-
-                        if (problem != null && !searchMode) {
-                            item {
-                                ProblemCard(
-                                    title = stringResource(R.string.areas_failed_title),
-                                    message = problem.message,
-                                    code = problem.code,
-                                    onRetry = onRefresh,
-                                )
+                            if (problem != null && !searchMode) {
+                                item {
+                                    ProblemCard(
+                                        title = stringResource(R.string.areas_failed_title),
+                                        message = problem.message,
+                                        code = problem.code,
+                                        onRetry = onRefresh,
+                                    )
+                                }
                             }
                         }
                     }

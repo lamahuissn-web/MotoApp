@@ -55,6 +55,8 @@ fun HousesScreen(
     onRetry: () -> Unit,
     onOpenHouse: (House) -> Unit,
     staleAsOf: String? = null,
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
 ) {
     val sheet = (load as? Load.Ready)?.value
 
@@ -155,49 +157,55 @@ fun HousesScreen(
                 )
             }
 
-            is Load.Ready -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                item {
-                    SectionHeading(
-                        text = stringResource(R.string.houses_section),
-                        trailing = pluralStringResource(
-                            R.plurals.houses_count,
-                            load.value.houses.size,
-                            load.value.houses.size,
-                        ),
-                    )
-                }
-
-                if (load.value.houses.isEmpty()) {
+            is Load.Ready ->
+                PullToRefresh(
+                    refreshing = refreshing,
+                    onRefresh = onPullRefresh,
+                ) {
+                    LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     item {
-                        MotoCard {
-                            Text(
-                                text = stringResource(R.string.houses_empty),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        SectionHeading(
+                            text = stringResource(R.string.houses_section),
+                            trailing = pluralStringResource(
+                                R.plurals.houses_count,
+                                load.value.houses.size,
+                                load.value.houses.size,
+                            ),
+                        )
+                    }
+
+                    if (load.value.houses.isEmpty()) {
+                        item {
+                            MotoCard {
+                                Text(
+                                    text = stringResource(R.string.houses_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+
+                    items(load.value.houses, key = { it.id }) { house ->
+                        HouseRow(house = house, onOpen = { onOpenHouse(house) })
+                    }
+
+                    if (problem != null) {
+                        item {
+                            ProblemCard(
+                                title = stringResource(R.string.houses_failed_title),
+                                message = problem.message,
+                                code = problem.code,
+                                onRetry = onRetry,
                             )
                         }
                     }
                 }
-
-                items(load.value.houses, key = { it.id }) { house ->
-                    HouseRow(house = house, onOpen = { onOpenHouse(house) })
                 }
-
-                if (problem != null) {
-                    item {
-                        ProblemCard(
-                            title = stringResource(R.string.houses_failed_title),
-                            message = problem.message,
-                            code = problem.code,
-                            onRetry = onRetry,
-                        )
-                    }
-                }
-            }
         }
     }
 }

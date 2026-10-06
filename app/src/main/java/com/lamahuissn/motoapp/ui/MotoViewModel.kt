@@ -291,24 +291,26 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      * time on the desk, and it writes nothing at all from a manager's pocket.
      */
     fun loadManager() {
-        val token = _session.value?.token ?: return
-
         if (_manager.value !is Load.Ready) {
             _manager.value = Load.Busy
         }
 
         _problem.value = null
 
-        viewModelScope.launch {
-            when (val call = MotoApi.managerBoard(token)) {
-                is ApiCall.Success -> _manager.value = Load.Ready(call.value)
+        viewModelScope.launch { readManager() }
+    }
 
-                else -> {
-                    _problem.value = problem(call)
+    private suspend fun readManager() {
+        val token = _session.value?.token ?: return
 
-                    if (_manager.value !is Load.Ready) {
-                        _manager.value = Load.Failed(_problem.value?.message)
-                    }
+        when (val call = MotoApi.managerBoard(token)) {
+            is ApiCall.Success -> _manager.value = Load.Ready(call.value)
+
+            else -> {
+                _problem.value = problem(call)
+
+                if (_manager.value !is Load.Ready) {
+                    _manager.value = Load.Failed(_problem.value?.message)
                 }
             }
         }
@@ -366,6 +368,9 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         else -> false
     }
 
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
     /**
      * Where a household opened from OUTSIDE the area sheets came from — the manager's board, or a
      * search. Those houses carry `areaId = 0` (there is no sheet behind them), so back has to be told
@@ -392,42 +397,71 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     /* ------------------------------------------------------------- the collector */
 
-    fun loadAreas() {
-        val token = _session.value?.token ?: return
-        val me = _session.value?.user?.id ?: return
+    /**
+     * Pull the screen down to ask again — the gesture every phone user already knows.
+     *
+     * It reads whatever the CURRENT screen is about, and holds the gesture's own indicator up until that
+     * answer is in: a refresh that shows nothing while it runs reads as a refresh that did nothing.
+     */
+    fun refresh() {
+        if (_refreshing.value) return
+        _refreshing.value = true
 
+        viewModelScope.launch {
+            try {
+                when (val current = _screen.value) {
+                    Screen.Manager -> readManager()
+                    Screen.Queue -> flushNow()
+                    is Screen.Houses -> readSheet(current.areaId)
+                    is Screen.House -> readHouse(current.houseId)
+                    Screen.Login -> Unit
+                    else -> readAreas()
+                }
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
+    fun loadAreas() {
         // Whatever the office answered last is on screen at once; the fresh answer replaces it when it
         // arrives. A spinner only ever appears over a screen this session has never read.
         boardCache?.let { _board.value = Load.Ready(it) } ?: run { _board.value = Load.Busy }
         _problem.value = null
 
-        viewModelScope.launch {
-            when (val call = MotoApi.areas(token, sink = { offline.put(me, OfflineCache.BOARD, it) })) {
-                is ApiCall.Success -> {
-                    boardCache = call.value
-                    _staleAsOf.value = null
-                    _board.value = Load.Ready(call.value)
-                    _lbpRate.value = call.value.lbpRate
+        viewModelScope.launch { readAreas() }
+    }
 
-                    // The network just worked: anything the office still owes an answer for goes out now.
-                    flush()
-                }
+    /** The read itself, awaitable so a pull gesture can hold its indicator until the answer is in. */
+    private suspend fun readAreas() {
+        val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
 
-                else -> {
-                    _problem.value = problem(call)
+        when (val call = MotoApi.areas(token, sink = { offline.put(me, OfflineCache.BOARD, it) })) {
+            is ApiCall.Success -> {
+                boardCache = call.value
+                _staleAsOf.value = null
+                _board.value = Load.Ready(call.value)
+                _lbpRate.value = call.value.lbpRate
 
-                    if (boardCache == null) {
-                        // No answer now, and nothing read in this session: the phone's own copy is the only
-                        // way in, and it says how old it is.
-                        val stored = offline.body(me, OfflineCache.BOARD)?.let { MotoApi.parseBoard(it) }
+                // The network just worked: anything the office still owes an answer for goes out now.
+                flushNow()
+            }
 
-                        if (stored != null) {
-                            _staleAsOf.value = offline.storedAt(me, OfflineCache.BOARD)
-                            _board.value = Load.Ready(stored)
-                            _lbpRate.value = stored.lbpRate
-                        } else {
-                            _board.value = Load.Failed(_problem.value?.message)
-                        }
+            else -> {
+                _problem.value = problem(call)
+
+                if (boardCache == null) {
+                    // No answer now, and nothing read in this session: the phone's own copy is the only
+                    // way in, and it says how old it is.
+                    val stored = offline.body(me, OfflineCache.BOARD)?.let { MotoApi.parseBoard(it) }
+
+                    if (stored != null) {
+                        _staleAsOf.value = offline.storedAt(me, OfflineCache.BOARD)
+                        _board.value = Load.Ready(stored)
+                        _lbpRate.value = stored.lbpRate
+                    } else {
+                        _board.value = Load.Failed(_problem.value?.message)
                     }
                 }
             }
@@ -443,33 +477,36 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadSheet(routeId: Int? = null) {
         val id = routeId ?: (screen.value as? Screen.Houses)?.areaId ?: return
-        val token = _session.value?.token ?: return
-        val me = _session.value?.user?.id ?: return
 
         sheetCache[id]?.let { _sheet.value = Load.Ready(it) } ?: run { _sheet.value = Load.Busy }
         _problem.value = null
 
-        viewModelScope.launch {
-            when (val call = MotoApi.houses(token, id, sink = { offline.put(me, OfflineCache.sheet(id), it) })) {
-                is ApiCall.Success -> {
-                    sheetCache[id] = call.value
-                    _staleAsOf.value = null
-                    _sheet.value = Load.Ready(call.value)
-                    call.value.lbpRate?.let { _lbpRate.value = it }
-                }
+        viewModelScope.launch { readSheet(id) }
+    }
 
-                else -> {
-                    _problem.value = problem(call)
+    private suspend fun readSheet(id: Int) {
+        val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
 
-                    if (sheetCache[id] == null) {
-                        val stored = offline.body(me, OfflineCache.sheet(id))?.let { MotoApi.parseSheet(it) }
+        when (val call = MotoApi.houses(token, id, sink = { offline.put(me, OfflineCache.sheet(id), it) })) {
+            is ApiCall.Success -> {
+                sheetCache[id] = call.value
+                _staleAsOf.value = null
+                _sheet.value = Load.Ready(call.value)
+                call.value.lbpRate?.let { _lbpRate.value = it }
+            }
 
-                        if (stored != null) {
-                            _staleAsOf.value = offline.storedAt(me, OfflineCache.sheet(id))
-                            _sheet.value = Load.Ready(stored)
-                        } else {
-                            _sheet.value = Load.Failed(_problem.value?.message)
-                        }
+            else -> {
+                _problem.value = problem(call)
+
+                if (sheetCache[id] == null) {
+                    val stored = offline.body(me, OfflineCache.sheet(id))?.let { MotoApi.parseSheet(it) }
+
+                    if (stored != null) {
+                        _staleAsOf.value = offline.storedAt(me, OfflineCache.sheet(id))
+                        _sheet.value = Load.Ready(stored)
+                    } else {
+                        _sheet.value = Load.Failed(_problem.value?.message)
                     }
                 }
             }
@@ -533,32 +570,35 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadHouse(houseId: Int? = null) {
         val id = houseId ?: (screen.value as? Screen.House)?.houseId ?: return
-        val token = _session.value?.token ?: return
-        val me = _session.value?.user?.id ?: return
 
         houseCache[id]?.let { _house.value = Load.Ready(it) } ?: run { _house.value = Load.Busy }
         _problem.value = null
 
-        viewModelScope.launch {
-            when (val call = MotoApi.house(token, id, sink = { offline.put(me, OfflineCache.house(id), it) })) {
-                is ApiCall.Success -> {
-                    houseCache[id] = call.value
-                    _staleAsOf.value = null
-                    _house.value = Load.Ready(call.value)
-                }
+        viewModelScope.launch { readHouse(id) }
+    }
 
-                else -> {
-                    _problem.value = problem(call)
+    private suspend fun readHouse(id: Int) {
+        val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
 
-                    if (houseCache[id] == null) {
-                        val stored = offline.body(me, OfflineCache.house(id))?.let { MotoApi.parseHouseBody(it) }
+        when (val call = MotoApi.house(token, id, sink = { offline.put(me, OfflineCache.house(id), it) })) {
+            is ApiCall.Success -> {
+                houseCache[id] = call.value
+                _staleAsOf.value = null
+                _house.value = Load.Ready(call.value)
+            }
 
-                        if (stored != null) {
-                            _staleAsOf.value = offline.storedAt(me, OfflineCache.house(id))
-                            _house.value = Load.Ready(stored)
-                        } else {
-                            _house.value = Load.Failed(_problem.value?.message)
-                        }
+            else -> {
+                _problem.value = problem(call)
+
+                if (houseCache[id] == null) {
+                    val stored = offline.body(me, OfflineCache.house(id))?.let { MotoApi.parseHouseBody(it) }
+
+                    if (stored != null) {
+                        _staleAsOf.value = offline.storedAt(me, OfflineCache.house(id))
+                        _house.value = Load.Ready(stored)
+                    } else {
+                        _house.value = Load.Failed(_problem.value?.message)
                     }
                 }
             }
@@ -726,6 +766,11 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      * a receipt to the token that sent it, so another collector's rows wait for their own session.
      */
     fun flush() {
+        viewModelScope.launch { flushNow() }
+    }
+
+    /** The flush itself, awaitable — so a pull gesture can hold its indicator until the queue drains. */
+    private suspend fun flushNow() {
         val me = _session.value?.user?.id ?: return
         if (flushing) return
 
@@ -734,24 +779,22 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
         flushing = true
 
-        viewModelScope.launch {
-            try {
-                var applied = false
+        try {
+            var applied = false
 
-                for (entry in owed) {
-                    val token = _session.value?.token ?: return@launch
+            for (entry in owed) {
+                val token = _session.value?.token ?: return
 
-                    val settled = settle(entry, send(entry, token))
-                    update(settled)
+                val settled = settle(entry, send(entry, token))
+                update(settled)
 
-                    if (settled.state == QueueState.Done) applied = true
-                    if (!QueueDecision.continueAfter(settled)) break
-                }
-
-                if (applied) refreshAfterWrite(null)
-            } finally {
-                flushing = false
+                if (settled.state == QueueState.Done) applied = true
+                if (!QueueDecision.continueAfter(settled)) break
             }
+
+            if (applied) refreshAfterWrite(null)
+        } finally {
+            flushing = false
         }
     }
 

@@ -62,6 +62,8 @@ fun ManagerScreen(
     onOpenAreas: () -> Unit,
     onSignOut: () -> Unit,
     onOpenHouse: (id: Int) -> Unit,
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
 
@@ -94,174 +96,179 @@ fun ManagerScreen(
             is Load.Ready -> {
                 val board = load.value
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                PullToRefresh(
+                    refreshing = refreshing,
+                    onRefresh = onPullRefresh,
                 ) {
-                    item {
-                        Column(modifier = Modifier.padding(bottom = 4.dp)) {
-                            Text(
-                                text = stringResource(R.string.mgr_greeting, userName),
-                                style = MaterialTheme.typography.titleLarge,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Badge(text = board.label, tone = Tone.Primary)
-                                Spacer(Modifier.width(8.dp))
-                                Badge(
-                                    text = pluralStringResource(
-                                        R.plurals.houses_count,
-                                        board.active,
-                                        board.active,
-                                    ),
-                                    tone = Tone.Info,
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        item {
+                            Column(modifier = Modifier.padding(bottom = 4.dp)) {
+                                Text(
+                                    text = stringResource(R.string.mgr_greeting, userName),
+                                    style = MaterialTheme.typography.titleLarge,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Badge(text = board.label, tone = Tone.Primary)
+                                    Spacer(Modifier.width(8.dp))
+                                    Badge(
+                                        text = pluralStringResource(
+                                            R.plurals.houses_count,
+                                            board.active,
+                                            board.active,
+                                        ),
+                                        tone = Tone.Info,
+                                    )
+                                }
+                            }
+                        }
+
+                        if (problem != null) {
+                            item {
+                                ProblemCard(
+                                    title = stringResource(R.string.mgr_stale_title),
+                                    message = problem.message,
+                                    code = problem.code,
+                                    onRetry = onRefresh,
                                 )
                             }
                         }
-                    }
 
-                    if (problem != null) {
+                        // The month in two cards: how much of the billing came in, and what came in.
                         item {
-                            ProblemCard(
-                                title = stringResource(R.string.mgr_stale_title),
-                                message = problem.message,
-                                code = problem.code,
-                                onRetry = onRefresh,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                ManagerStat(
+                                    label = stringResource(R.string.mgr_rate),
+                                    value = Money.percent(board.rate),
+                                    sub = stringResource(
+                                        R.string.mgr_rate_sub,
+                                        Money.percent(board.ratePrevious),
+                                        Money.delta(board.rate - board.ratePrevious),
+                                    ),
+                                    tone = when {
+                                        board.rate >= 80 -> Tone.Success
+                                        board.rate >= 50 -> Tone.Warning
+                                        else -> Tone.Danger
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ManagerStat(
+                                    label = stringResource(R.string.mgr_collected),
+                                    value = Money.usd(board.collected),
+                                    sub = stringResource(R.string.mgr_invoiced_sub, Money.usd(board.invoiced)),
+                                    tone = Tone.Success,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
-                    }
 
-                    // The month in two cards: how much of the billing came in, and what came in.
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            ManagerStat(
-                                label = stringResource(R.string.mgr_rate),
-                                value = Money.percent(board.rate),
-                                sub = stringResource(
-                                    R.string.mgr_rate_sub,
-                                    Money.percent(board.ratePrevious),
-                                    Money.delta(board.rate - board.ratePrevious),
-                                ),
-                                tone = when {
-                                    board.rate >= 80 -> Tone.Success
-                                    board.rate >= 50 -> Tone.Warning
-                                    else -> Tone.Danger
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                            ManagerStat(
-                                label = stringResource(R.string.mgr_collected),
-                                value = Money.usd(board.collected),
-                                sub = stringResource(R.string.mgr_invoiced_sub, Money.usd(board.invoiced)),
-                                tone = Tone.Success,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
+                        // What is still out — the figure a manager is asked about most often.
+                        item {
+                            MotoCard {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        MicroLabel(stringResource(R.string.mgr_outstanding))
+                                        Spacer(Modifier.height(4.dp))
+                                        Amount(
+                                            value = Money.usd(board.outstanding),
+                                            tone = Tone.Danger,
+                                            style = MaterialTheme.typography.displaySmall,
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = if (board.outstandingInactive != "0.00") {
+                                                stringResource(
+                                                    R.string.mgr_inactive_sub,
+                                                    Money.usd(board.outstandingInactive),
+                                                )
+                                            } else {
+                                                stringResource(R.string.mgr_outstanding_sub)
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
 
-                    // What is still out — the figure a manager is asked about most often.
-                    item {
-                        MotoCard {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    MicroLabel(stringResource(R.string.mgr_outstanding))
-                                    Spacer(Modifier.height(4.dp))
-                                    Amount(
-                                        value = Money.usd(board.outstanding),
-                                        tone = Tone.Danger,
-                                        style = MaterialTheme.typography.displaySmall,
+                                    Badge(
+                                        text = stringResource(R.string.required_badge),
+                                        tone = if (board.outstanding != "0.00") Tone.Danger else Tone.Success,
+                                        size = BadgeSize.Large,
                                     )
-                                    Spacer(Modifier.height(4.dp))
+                                }
+                            }
+                        }
+
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                ManagerStat(
+                                    label = stringResource(R.string.mgr_houses),
+                                    value = board.active.toString(),
+                                    sub = stringResource(R.string.mgr_houses_sub, board.metered, board.flat),
+                                    tone = Tone.Info,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ManagerStat(
+                                    label = stringResource(R.string.mgr_kwh),
+                                    value = board.kwh,
+                                    sub = stringResource(R.string.mgr_kwh_sub, Money.usd(board.kwhPrice)),
+                                    tone = Tone.Warning,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+
+                        // The question a manager is asked in a phone call: how much is on each collector?
+                        item {
+                            SectionHeading(
+                                text = stringResource(R.string.mgr_collectors),
+                                trailing = board.collectors.size.toString(),
+                            )
+                        }
+
+                        if (board.collectors.isEmpty()) {
+                            item {
+                                MotoCard {
                                     Text(
-                                        text = if (board.outstandingInactive != "0.00") {
-                                            stringResource(
-                                                R.string.mgr_inactive_sub,
-                                                Money.usd(board.outstandingInactive),
-                                            )
-                                        } else {
-                                            stringResource(R.string.mgr_outstanding_sub)
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
+                                        text = stringResource(R.string.mgr_no_collectors),
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-
-                                Badge(
-                                    text = stringResource(R.string.required_badge),
-                                    tone = if (board.outstanding != "0.00") Tone.Danger else Tone.Success,
-                                    size = BadgeSize.Large,
-                                )
                             }
                         }
-                    }
 
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            ManagerStat(
-                                label = stringResource(R.string.mgr_houses),
-                                value = board.active.toString(),
-                                sub = stringResource(R.string.mgr_houses_sub, board.metered, board.flat),
-                                tone = Tone.Info,
-                                modifier = Modifier.weight(1f),
-                            )
-                            ManagerStat(
-                                label = stringResource(R.string.mgr_kwh),
-                                value = board.kwh,
-                                sub = stringResource(R.string.mgr_kwh_sub, Money.usd(board.kwhPrice)),
-                                tone = Tone.Warning,
-                                modifier = Modifier.weight(1f),
-                            )
+                        items(board.collectors, key = { it.id }) { collector ->
+                            CollectorRow(collector)
                         }
-                    }
 
-                    // The question a manager is asked in a phone call: how much is on each collector?
-                    item {
-                        SectionHeading(
-                            text = stringResource(R.string.mgr_collectors),
-                            trailing = board.collectors.size.toString(),
-                        )
-                    }
+                        if (board.recentPayments.isNotEmpty()) {
+                            item {
+                                SectionHeading(stringResource(R.string.mgr_recent))
+                            }
 
-                    if (board.collectors.isEmpty()) {
-                        item {
-                            MotoCard {
-                                Text(
-                                    text = stringResource(R.string.mgr_no_collectors),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            items(board.recentPayments, key = { it.id }) { payment ->
+                                PaymentRow(payment = payment, onOpen = onOpenHouse)
                             }
                         }
-                    }
 
-                    items(board.collectors, key = { it.id }) { collector ->
-                        CollectorRow(collector)
-                    }
-
-                    if (board.recentPayments.isNotEmpty()) {
                         item {
-                            SectionHeading(stringResource(R.string.mgr_recent))
+                            Spacer(Modifier.height(4.dp))
+                            OutlineButton(
+                                text = stringResource(R.string.mgr_open_areas),
+                                onClick = onOpenAreas,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
-
-                        items(board.recentPayments, key = { it.id }) { payment ->
-                            PaymentRow(payment = payment, onOpen = onOpenHouse)
-                        }
-                    }
-
-                    item {
-                        Spacer(Modifier.height(4.dp))
-                        OutlineButton(
-                            text = stringResource(R.string.mgr_open_areas),
-                            onClick = onOpenAreas,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
                     }
                 }
             }

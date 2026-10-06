@@ -95,6 +95,8 @@ fun HouseScreen(
     staleAsOf: String? = null,
     queueOwed: Int = 0,
     onOpenQueue: () -> Unit = {},
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
 ) {
     val house = (load as? Load.Ready)?.value
     val context = LocalContext.current
@@ -199,141 +201,146 @@ fun HouseScreen(
             is Load.Ready -> {
                 val entry = load.value
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scroll)
-                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                PullToRefresh(
+                    refreshing = refreshing,
+                    onRefresh = onPullRefresh,
                 ) {
-                    IdentityCard(entry)
-                    BalanceCard(entry)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scroll)
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IdentityCard(entry)
+                        BalanceCard(entry)
 
-                    // A refresh that failed while he is looking at figures he already had: say so
-                    // rather than let him read a balance that may be a minute old as if it were now.
-                    if (problem != null) {
-                        ProblemCard(
-                            title = stringResource(R.string.house_stale_title),
-                            message = problem.message,
-                            code = problem.code,
-                            onRetry = onRetryLoad,
-                        )
-                    }
+                        // A refresh that failed while he is looking at figures he already had: say so
+                        // rather than let him read a balance that may be a minute old as if it were now.
+                        if (problem != null) {
+                            ProblemCard(
+                                title = stringResource(R.string.house_stale_title),
+                                message = problem.message,
+                                code = problem.code,
+                                onRetry = onRetryLoad,
+                            )
+                        }
 
-                    if (outcome != null && outcome.kind == OutcomeKind.Unknown) {
-                        // A write the office has not answered about yet is RECORDED, not failed — and the
-                        // collector may be holding cash against it. So it reads as «سُجّل في هاتفك» with
-                        // what it was, and it never invites him to take the money a second time.
-                        MotoCard(padding = 14.dp) {
-                            Alert(text = outcome.title, tone = Tone.Warning)
-                            Spacer(Modifier.height(10.dp))
+                        if (outcome != null && outcome.kind == OutcomeKind.Unknown) {
+                            // A write the office has not answered about yet is RECORDED, not failed — and the
+                            // collector may be holding cash against it. So it reads as «سُجّل في هاتفك» with
+                            // what it was, and it never invites him to take the money a second time.
+                            MotoCard(padding = 14.dp) {
+                                Alert(text = outcome.title, tone = Tone.Warning)
+                                Spacer(Modifier.height(10.dp))
 
-                            outcome.facts.forEach { (label, value) ->
-                                Text(
-                                    text = if (value.isBlank()) label else "$label — $value",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                Spacer(Modifier.height(4.dp))
-                            }
+                                outcome.facts.forEach { (label, value) ->
+                                    Text(
+                                        text = if (value.isBlank()) label else "$label — $value",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                }
 
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Spacer(Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlineButton(
+                                        text = stringResource(R.string.queue_send_now),
+                                        onClick = onRetryWrite,
+                                        tone = Tone.Warning,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    OutlineButton(
+                                        text = stringResource(R.string.queue_open),
+                                        onClick = onOpenQueue,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
                                 OutlineButton(
-                                    text = stringResource(R.string.queue_send_now),
-                                    onClick = onRetryWrite,
-                                    tone = Tone.Warning,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                OutlineButton(
-                                    text = stringResource(R.string.queue_open),
-                                    onClick = onOpenQueue,
-                                    modifier = Modifier.weight(1f),
+                                    text = stringResource(R.string.done),
+                                    onClick = onDismissOutcome,
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
-                            Spacer(Modifier.height(6.dp))
+                        }
+
+                        if (outcome != null && outcome.kind == OutcomeKind.Refused) {
+                            Alert(
+                                text = outcome.problem?.message ?: stringResource(R.string.outcome_refused_hint),
+                                tone = Tone.Danger,
+                            )
                             OutlineButton(
                                 text = stringResource(R.string.done),
                                 onClick = onDismissOutcome,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
-                    }
 
-                    if (outcome != null && outcome.kind == OutcomeKind.Refused) {
-                        Alert(
-                            text = outcome.problem?.message ?: stringResource(R.string.outcome_refused_hint),
-                            tone = Tone.Danger,
-                        )
+                        if (outcome != null && outcome.kind == OutcomeKind.Reading) {
+                            Alert(
+                                text = stringResource(R.string.reading_saved_alert),
+                                tone = Tone.Success,
+                            )
+                        }
+
+                        if (outcome != null && outcome.kind == OutcomeKind.Collection && outcome.receipt != null) {
+                            ReceiptCard(
+                                outcome = outcome,
+                                onShare = { receipt -> shareReceipt(context, receipt) },
+                                onDone = onDismissOutcome,
+                            )
+                        } else {
+                            Segmented(
+                                segments = listOf(
+                                    Segment(stringResource(R.string.view_overview)),
+                                    Segment(
+                                        label = stringResource(R.string.view_reading),
+                                        dotTone = if (!entry.isMetered) {
+                                            null
+                                        } else if (entry.readingDone) {
+                                            Tone.Success
+                                        } else {
+                                            Tone.Warning
+                                        },
+                                    ),
+                                    Segment(
+                                        label = stringResource(R.string.view_collect),
+                                        dotTone = if (entry.owes) Tone.Danger else null,
+                                    ),
+                                ),
+                                selected = view,
+                                onSelect = { view = it },
+                            )
+
+                            when (view) {
+                                VIEW_READING -> ReadingPanel(
+                                    house = entry,
+                                    busy = busy,
+                                    onRead = onRead,
+                                )
+
+                                VIEW_PAYMENT -> PaymentPanel(
+                                    house = entry,
+                                    rate = sheetRate,
+                                    busy = busy,
+                                    onCollect = onCollect,
+                                )
+
+                                else -> OverviewPanel(
+                                    house = entry,
+                                    onGoCollect = { view = VIEW_PAYMENT },
+                                    onGoReading = { view = VIEW_READING },
+                                )
+                            }
+                        }
+
                         OutlineButton(
-                            text = stringResource(R.string.done),
-                            onClick = onDismissOutcome,
+                            text = stringResource(R.string.back),
+                            onClick = onBack,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-
-                    if (outcome != null && outcome.kind == OutcomeKind.Reading) {
-                        Alert(
-                            text = stringResource(R.string.reading_saved_alert),
-                            tone = Tone.Success,
-                        )
-                    }
-
-                    if (outcome != null && outcome.kind == OutcomeKind.Collection && outcome.receipt != null) {
-                        ReceiptCard(
-                            outcome = outcome,
-                            onShare = { receipt -> shareReceipt(context, receipt) },
-                            onDone = onDismissOutcome,
-                        )
-                    } else {
-                        Segmented(
-                            segments = listOf(
-                                Segment(stringResource(R.string.view_overview)),
-                                Segment(
-                                    label = stringResource(R.string.view_reading),
-                                    dotTone = if (!entry.isMetered) {
-                                        null
-                                    } else if (entry.readingDone) {
-                                        Tone.Success
-                                    } else {
-                                        Tone.Warning
-                                    },
-                                ),
-                                Segment(
-                                    label = stringResource(R.string.view_collect),
-                                    dotTone = if (entry.owes) Tone.Danger else null,
-                                ),
-                            ),
-                            selected = view,
-                            onSelect = { view = it },
-                        )
-
-                        when (view) {
-                            VIEW_READING -> ReadingPanel(
-                                house = entry,
-                                busy = busy,
-                                onRead = onRead,
-                            )
-
-                            VIEW_PAYMENT -> PaymentPanel(
-                                house = entry,
-                                rate = sheetRate,
-                                busy = busy,
-                                onCollect = onCollect,
-                            )
-
-                            else -> OverviewPanel(
-                                house = entry,
-                                onGoCollect = { view = VIEW_PAYMENT },
-                                onGoReading = { view = VIEW_READING },
-                            )
-                        }
-                    }
-
-                    OutlineButton(
-                        text = stringResource(R.string.back),
-                        onClick = onBack,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
             }
         }
