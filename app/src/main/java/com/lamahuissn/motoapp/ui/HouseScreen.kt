@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.House
+import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.HouseReceipt
 import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.ui.theme.Green
@@ -106,7 +109,7 @@ fun HouseScreen(
     onReverse: (paymentId: Int, reason: String) -> Unit = { _, _ -> },
     onCloseReversal: () -> Unit = {},
     myId: Int? = null,
-    receiptToShare: String? = null,
+    receiptToShare: ReceiptMessage? = null,
     onSendReceipt: (paymentId: Int) -> Unit = {},
     onShareDone: () -> Unit = {},
 ) {
@@ -128,8 +131,8 @@ fun HouseScreen(
     val shareContext = LocalContext.current
 
     LaunchedEffect(receiptToShare) {
-        val text = receiptToShare ?: return@LaunchedEffect
-        shareReceipt(shareContext, text)
+        val message = receiptToShare ?: return@LaunchedEffect
+        sendReceipt(shareContext, message)
         onShareDone()
     }
 
@@ -738,13 +741,12 @@ private fun OverviewPanel(
                         if (canReverse || (myId != null && receipt.collectorId == myId)) {
                             // Sending a receipt again is the collector's own receipt or the office's — the
                             // same rule the receipt endpoint enforces, answered before the tap.
-                            TextButton(
-                                onClick = { onSendReceipt(receipt.id) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.share_receipt),
-                                    style = MaterialTheme.typography.labelMedium,
+                            IconButton(onClick = { onSendReceipt(receipt.id) }, modifier = Modifier.size(34.dp)) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_whatsapp),
+                                    contentDescription = stringResource(R.string.send_receipt_whatsapp),
+                                    modifier = Modifier.size(17.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
                                 )
                             }
                         }

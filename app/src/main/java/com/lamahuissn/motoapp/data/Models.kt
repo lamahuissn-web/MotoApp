@@ -155,6 +155,16 @@ data class WalletInvoice(
     val remaining: String,
 )
 
+/**
+ * A receipt on its way to a household (spec 011 §9).
+ *
+ * Two roads, one document: `text` is the office's receipt as words, and `waLink` is the office's own wa.me
+ * link — present only when the OFFICE could turn the household's number into an international one. The
+ * phone opens the link when it can and falls back to the share sheet when it cannot, so a number the office
+ * will not vouch for is never guessed at here.
+ */
+data class ReceiptMessage(val text: String, val waLink: String? = null)
+
 /** One handover the office signed for. */
 data class WalletHandover(
     val date: String?,

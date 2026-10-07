@@ -172,15 +172,23 @@ object MotoApi {
      * A household that lost the message in WhatsApp needs the words, not a file — and they come from the
      * office's builder, so what arrives the second time is what was handed over the first time.
      */
-    suspend fun receiptText(token: String, paymentId: Int): ApiCall<String> = call(
+    suspend fun receiptText(token: String, paymentId: Int): ApiCall<ReceiptMessage> = call(
         Request.Builder().url("$baseUrl/api/v1/receipts/$paymentId/text").authorized(token).build(),
-    ) { body -> parseReceiptText(body) }
+    ) { body -> parseReceiptMessage(body) }
 
-    /** The receipt's words, or nothing if the office sent none — an empty receipt is not a receipt. */
-    fun parseReceiptText(body: String): String? =
-        runCatching { JSONObject(body).optString("receipt_text") }
-            .getOrNull()
-            ?.takeIf { it.isNotEmpty() && it != "null" }
+    /**
+     * The receipt's words and, when the office vouchsafes the number, the household's own chat to open.
+     * Nothing if the office sent no words: an empty receipt is not a receipt.
+     */
+    fun parseReceiptMessage(body: String): ReceiptMessage? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val text = row.optString("receipt_text").takeIf { it.isNotEmpty() && it != "null" } ?: return null
+
+        return ReceiptMessage(
+            text = text,
+            waLink = row.optString("wa_link").takeIf { it.isNotEmpty() && it != "null" },
+        )
+    }
 
     /**
      * Take one receipt back (spec 009, phase C) — the most dangerous write this app makes.

@@ -62,8 +62,10 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
+import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.ui.theme.AmberInk
 import com.lamahuissn.motoapp.ui.theme.BlueInk
@@ -980,6 +982,26 @@ fun ReversalDialog(
  * It lives here rather than on one screen because two screens now send a receipt: the one that just took the
  * money, and the purse's review where an old one is sent again to a household that lost it.
  */
+fun sendReceipt(context: Context, message: ReceiptMessage) {
+    // The office's own link first: it lands IN the household's chat with the receipt already written, which
+    // is the tap a collector actually wants. The link exists only when the office could turn that household's
+    // number into an international one — so a number the office will not vouch for is never guessed at here.
+    val link = message.waLink
+
+    if (link != null && openLink(context, link)) {
+        return
+    }
+
+    // No vouchable number, or no app to open it: the words still leave the phone, through whatever the
+    // household actually uses.
+    shareReceipt(context, message.text)
+}
+
+/** True when something on this phone took the link. A missing app is a fallback, not a crash. */
+private fun openLink(context: Context, link: String): Boolean = runCatching {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+}.isSuccess
+
 fun shareReceipt(context: Context, receipt: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"

@@ -41,8 +41,8 @@ android {
         applicationId = "com.lamahuissn.motoapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.3.2"
+        versionCode = 7
+        versionName = "0.3.3"
 
         // The office reaches the panel through the Cloudflare tunnel, and the phone reaches the same
         // one: one host, one door, no second network to keep alive. A build that pointed somewhere

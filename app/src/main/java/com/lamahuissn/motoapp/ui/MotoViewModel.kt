@@ -23,6 +23,7 @@ import com.lamahuissn.motoapp.data.QueueRunner
 import com.lamahuissn.motoapp.data.QueueState
 import com.lamahuissn.motoapp.data.QueuedWrite
 import com.lamahuissn.motoapp.data.ReadingAnswer
+import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.data.SearchHit
 import com.lamahuissn.motoapp.data.Session
@@ -496,8 +497,8 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
      * a copy that lived in the app for a week is a second version of it. On a failure the office's own
      * sentence is what the screen shows — the tap has to say something either way.
      */
-    private val _receiptToShare = MutableStateFlow<String?>(null)
-    val receiptToShare: StateFlow<String?> = _receiptToShare.asStateFlow()
+    private val _receiptToShare = MutableStateFlow<ReceiptMessage?>(null)
+    val receiptToShare: StateFlow<ReceiptMessage?> = _receiptToShare.asStateFlow()
 
     fun shareReceiptAgain(paymentId: Int) {
         val token = _session.value?.token ?: return

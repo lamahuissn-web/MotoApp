@@ -137,18 +137,34 @@ class MotoWalletAnswerTest {
     }
 
     @Test
-    fun `the words of an old receipt are read, and an empty one is refused`() {
-        val text = MotoApi.parseReceiptText(
+    fun `a receipt on its way out carries the words and, when the office vouches for it, the chat`() {
+        val message = MotoApi.parseReceiptMessage(
             """{"receipt_text":"شركة المولّد\nإيصال قبض · PAY-2026-10-0009\nالبيت: بيت العيّنة",
+                "wa_link":"https://wa.me/96170555123?text=%D8%B4%D8%B1%D9%83%D8%A9",
                 "payment":{"id":41,"number":"PAY-2026-10-0009","amount":"25.00","collector_id":3}}""",
         )
 
-        assertNotNull(text)
-        assertTrue(text!!.contains("PAY-2026-10-0009"))
+        assertNotNull(message)
+        assertTrue(message!!.text.contains("PAY-2026-10-0009"))
+        assertTrue(message.waLink!!.startsWith("https://wa.me/96170555123?text="))
+    }
 
-        // A receipt with no words is not a receipt: nothing is sent rather than an empty message.
-        assertNull(MotoApi.parseReceiptText("""{"payment":{"id":41}}"""))
-        assertNull(MotoApi.parseReceiptText("not json at all"))
+    @Test
+    fun `a household the office cannot vouch for has no chat to open, but still gets the words`() {
+        val message = MotoApi.parseReceiptMessage(
+            """{"receipt_text":"إيصال قبض بلا رقم دولي","wa_link":null}""",
+        )
+
+        // No country code is invented on the phone: the link is absent, the words are not.
+        assertNotNull(message)
+        assertNull(message!!.waLink)
+        assertTrue(message.text.isNotEmpty())
+    }
+
+    @Test
+    fun `a receipt with no words is not a receipt`() {
+        assertNull(MotoApi.parseReceiptMessage("""{"payment":{"id":41}}"""))
+        assertNull(MotoApi.parseReceiptMessage("not json at all"))
     }
 
     @Test
