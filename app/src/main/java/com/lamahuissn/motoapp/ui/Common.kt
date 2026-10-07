@@ -65,6 +65,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
+import com.lamahuissn.motoapp.data.CorrectionAnswer
 import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.ui.theme.AmberInk
@@ -1010,4 +1011,118 @@ fun shareReceipt(context: Context, receipt: String) {
     }
 
     context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_receipt)))
+}
+
+/**
+ * Correcting a reading (spec 012) — the office's own act, in the collector's hand.
+ *
+ * It draws twice, like the reversal, and for the same reason: the first sheet asks WHY in writing (the
+ * sentence the trail will carry), and the second says plainly that the reading and its invoice go and that
+ * the original stays only in the audit. The engine keeps its own refusals — a paid invoice, a month already
+ * closed — and their sentences are what this sheet shows.
+ */
+@Composable
+fun CorrectionDialog(
+    label: String,
+    pair: String,
+    consumption: String?,
+    load: Load<CorrectionAnswer>,
+    onConfirm: (reason: String) -> Unit,
+    onClose: () -> Unit,
+) {
+    var reason by rememberSaveable(label) { mutableStateOf("") }
+    var confirming by rememberSaveable(label) { mutableStateOf(false) }
+
+    val busy = load is Load.Busy
+    val done = (load as? Load.Ready)?.value
+    val enough = reason.trim().length >= 10
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onClose() },
+        title = { Text(stringResource(R.string.correction_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(label, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                Amount(value = pair, style = MaterialTheme.typography.bodyMedium)
+                consumption?.let {
+                    Spacer(Modifier.height(2.dp))
+                    MicroLabel(stringResource(R.string.reading_kwh, it))
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                when {
+                    done != null -> {
+                        Alert(
+                            text = if (done.billNumber != null) {
+                                stringResource(
+                                    R.string.correction_done,
+                                    done.label ?: label,
+                                    Money.usd(done.billTotal ?: "0.00"),
+                                )
+                            } else {
+                                stringResource(R.string.correction_done_no_bill, done.label ?: label)
+                            },
+                            tone = Tone.Success,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        MicroLabel(
+                            stringResource(R.string.correction_balance_after, Money.usd(done.houseBalance)),
+                        )
+                    }
+
+                    else -> {
+                        FieldBox(
+                            label = stringResource(R.string.correction_reason_label),
+                            value = reason,
+                            onChange = { reason = it },
+                            keyboard = KeyboardType.Text,
+                            enabled = !busy,
+                        )
+
+                        if (!enough && reason.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            MicroLabel(stringResource(R.string.correction_reason_needed), tone = Tone.Danger)
+                        }
+
+                        if (load is Load.Failed) {
+                            Spacer(Modifier.height(8.dp))
+                            Alert(text = load.message.orEmpty(), tone = Tone.Danger)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (done == null) {
+                TextButton(onClick = { confirming = true }, enabled = enough && !busy) {
+                    Text(stringResource(R.string.correction_confirm))
+                }
+            } else {
+                TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
+            }
+        },
+        dismissButton = {
+            if (done == null) {
+                TextButton(onClick = onClose, enabled = !busy) { Text(stringResource(R.string.cancel)) }
+            }
+        },
+    )
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(stringResource(R.string.correction_second_title)) },
+            text = { Text(stringResource(R.string.correction_second_text, label)) },
+            confirmButton = {
+                TextButton(onClick = { confirming = false; onConfirm(reason.trim()) }) {
+                    Text(stringResource(R.string.correction_second_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }

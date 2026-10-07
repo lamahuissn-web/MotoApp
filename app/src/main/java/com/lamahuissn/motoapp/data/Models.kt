@@ -173,6 +173,15 @@ data class WalletHandover(
     val receivedBy: String?,
 )
 
+/** A reading that was taken back, and where the household stands now (spec 012). */
+data class CorrectionAnswer(
+    val label: String?,
+    val current: String,
+    val billNumber: String?,
+    val billTotal: String?,
+    val houseBalance: String,
+)
+
 /** A receipt that was taken back, as the office recorded it (spec 009, phase C). */
 data class ReversalAnswer(
     val id: Int,
@@ -323,6 +332,12 @@ data class ReadingLogRow(
     val estimated: Boolean,
     val reader: String?,
     val readOn: String?,
+    /**
+     * Whether this phone may correct it (spec 012) — the office's answer, not the app's guess: the server
+     * knows whose reading it is and whether it is still the day. It is a floor, not a promise: a paid
+     * invoice or a reading with no invoice is still refused by the engine, in its own words.
+     */
+    val correctable: Boolean = false,
 )
 
 /** What one receipt cleared, month by month — what a household disputes. */

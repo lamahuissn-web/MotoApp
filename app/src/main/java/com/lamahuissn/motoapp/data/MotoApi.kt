@@ -191,6 +191,39 @@ object MotoApi {
     }
 
     /**
+     * Take a mistaken reading back (spec 012).
+     *
+     * The engine decides — a paid invoice, a closed month without a written reason, a reading that produced
+     * no invoice — and refuses in its own sentence. What travels from here is only what the engine cannot
+     * know: the reason, in the corrector's own words, and an attempt key so a retry is not a second deletion.
+     */
+    suspend fun correctReading(
+        token: String,
+        readingId: Int,
+        reason: String,
+        key: String,
+    ): ApiCall<CorrectionAnswer> = money(
+        endpoint = "readings/$readingId/correction",
+        token = token,
+        key = key,
+        body = JSONObject().put("reason", reason).toString(),
+    ) { parseCorrection(it) }
+
+    /** What was removed, and where the household stands after. */
+    fun parseCorrection(body: String): CorrectionAnswer? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val gone = row.optJSONObject("corrected") ?: return null
+
+        return CorrectionAnswer(
+            label = gone.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+            current = gone.optString("current"),
+            billNumber = gone.optString("bill_number").takeIf { it.isNotEmpty() && it != "null" },
+            billTotal = gone.optString("bill_total").takeIf { it.isNotEmpty() && it != "null" },
+            houseBalance = row.optJSONObject("house")?.optString("balance").orEmpty(),
+        )
+    }
+
+    /**
      * Take one receipt back (spec 009, phase C) — the most dangerous write this app makes.
      *
      * A written reason travels with it: it is what the audit trail will say in six months, and the desk
@@ -641,6 +674,7 @@ object MotoApi {
                 estimated = row.optBoolean("estimated"),
                 reader = row.optString("reader").takeIf { it.isNotEmpty() && it != "null" },
                 readOn = row.optString("read_on").takeIf { it.isNotEmpty() && it != "null" },
+                correctable = row.optBoolean("correctable"),
             )
         }
     }

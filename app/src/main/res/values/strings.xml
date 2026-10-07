@@ -141,6 +141,18 @@
     <string name="reading_kwh">%1$s kWh</string>
     <string name="reading_estimated_badge">تقديرية</string>
     <string name="reading_this_month">هذا الشهر</string>
+    <!-- تصحيح قراءة (spec 012): الجابي يصحّح قراءته في اليوم نفسه، والمدير أي قراءة -->
+    <string name="correction_action">تصحيح</string>
+    <string name="correction_title">تصحيح قراءة</string>
+    <string name="correction_reason_label">سبب التصحيح — يبقى في سجل التدقيق</string>
+    <string name="correction_reason_needed">اكتب سبباً واضحاً (10 خانات على الأقل).</string>
+    <string name="correction_confirm">تصحيح القراءة</string>
+    <string name="correction_second_title">تأكيد أخير — تُحذف القراءة وفاتورتها</string>
+    <string name="correction_second_text">تُحذف قراءة %1$s وفاتورتها، ويعود المبلغ على البيت دَيناً. الأصل يبقى في سجل التدقيق، ولا يمكن التراجع عن الحذف.</string>
+    <string name="correction_second_confirm">نعم، احذف القراءة</string>
+    <string name="correction_done">أُزيلت قراءة %1$s وفاتورتها %2$s — أدخل القراءة الصحيحة.</string>
+    <string name="correction_done_no_bill">أُزيلت قراءة %1$s — أدخل القراءة الصحيحة.</string>
+    <string name="correction_balance_after">رصيد البيت الآن: %1$s</string>
     <string name="app_version">MotoApp %1$s</string>
     <string name="house_no_readings">لا قراءات سابقة على هذا العدّاد.</string>
     <string name="receipt_settled_line">سُدّد %1$s · %2$s</string>

@@ -12,6 +12,7 @@ import com.lamahuissn.motoapp.data.AreaSheet
 import com.lamahuissn.motoapp.data.AreasBoard
 import com.lamahuissn.motoapp.data.AttemptKey
 import com.lamahuissn.motoapp.data.CollectionAnswer
+import com.lamahuissn.motoapp.data.CorrectionAnswer
 import com.lamahuissn.motoapp.data.HandoverAnswer
 import com.lamahuissn.motoapp.data.House
 import com.lamahuissn.motoapp.data.ManagerBoard
@@ -306,6 +307,8 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         _house.value = Load.Idle
         _manager.value = Load.Idle
         _wallet.value = Load.Idle
+        _correction.value = Load.Idle
+        _receiptToShare.value = null
         _search.value = Load.Idle
         _problem.value = null
         _outcome.value = null
@@ -517,6 +520,47 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearReceiptToShare() {
         _receiptToShare.value = null
+    }
+
+    /**
+     * Taking a mistaken reading back (spec 012).
+     *
+     * Unlike the money writes there is no ceiling to check here: the engine owns every refusal (a paid
+     * invoice, a month already closed, a reading that billed nothing) and answers in the office's words. On
+     * success the household is re-read — its invoice is gone, and the collector is about to enter the right
+     * number in its place.
+     */
+    private val _correction = MutableStateFlow<Load<CorrectionAnswer>>(Load.Idle)
+    val correction: StateFlow<Load<CorrectionAnswer>> = _correction.asStateFlow()
+
+    fun correctReading(readingId: Int, reason: String) {
+        val token = _session.value?.token ?: return
+        if (_correction.value is Load.Busy) return
+
+        _problem.value = null
+        _correction.value = Load.Busy
+
+        viewModelScope.launch {
+            val call = MotoApi.correctReading(
+                token = token,
+                readingId = readingId,
+                reason = reason.trim(),
+                key = AttemptKey.next(),
+            )
+
+            when (call) {
+                is ApiCall.Success -> {
+                    _correction.value = Load.Ready(call.value)
+                    loadHouse()
+                }
+
+                else -> _correction.value = Load.Failed(problem(call).message)
+            }
+        }
+    }
+
+    fun clearCorrection() {
+        _correction.value = Load.Idle
     }
 
     /**

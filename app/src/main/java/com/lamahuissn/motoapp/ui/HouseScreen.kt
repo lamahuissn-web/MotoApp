@@ -62,7 +62,9 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
+import com.lamahuissn.motoapp.data.CorrectionAnswer
 import com.lamahuissn.motoapp.data.House
+import com.lamahuissn.motoapp.data.ReadingLogRow
 import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.HouseReceipt
 import com.lamahuissn.motoapp.data.ReversalAnswer
@@ -109,6 +111,9 @@ fun HouseScreen(
     onReverse: (paymentId: Int, reason: String) -> Unit = { _, _ -> },
     onCloseReversal: () -> Unit = {},
     myId: Int? = null,
+    correction: Load<CorrectionAnswer> = Load.Idle,
+    onCorrect: (readingId: Int, reason: String) -> Unit = { _, _ -> },
+    onCloseCorrection: () -> Unit = {},
     receiptToShare: ReceiptMessage? = null,
     onSendReceipt: (paymentId: Int) -> Unit = {},
     onShareDone: () -> Unit = {},
@@ -117,6 +122,11 @@ fun HouseScreen(
     // The receipt a manager is taking back (spec 009, phase C). Only a manager ever sets this: the button
     // that opens it is not drawn for a collector, and the route refuses him even if it were.
     var reversalFor by remember { mutableStateOf<ReceiptFace?>(null) }
+
+    // The reading being corrected (spec 012). Correcting is two steps — remove, then read again — so a
+    // success lands the collector on the reading form with an empty field, exactly where the office's own
+    // correction leaves him.
+    var correctionFor by remember { mutableStateOf<ReadingLogRow?>(null) }
     val context = LocalContext.current
     val scroll = rememberScrollState()
 
@@ -146,6 +156,15 @@ fun HouseScreen(
                 else -> VIEW_OVERVIEW
             },
         )
+    }
+
+    // A corrected reading puts him on the form with an empty field: correcting is «remove, then read again».
+    // (Here rather than above, because it moves `view`.)
+    LaunchedEffect(correction) {
+        if (correction is Load.Ready) {
+            view = VIEW_READING
+            scroll.animateScrollTo(0)
+        }
     }
 
     Column(
@@ -355,6 +374,17 @@ fun HouseScreen(
                                     house = entry,
                                     busy = busy,
                                     onRead = onRead,
+                                    correction = correction,
+                                    onCorrect = onCorrect,
+                                    onOpenCorrection = { row ->
+                                        onCloseCorrection()
+                                        correctionFor = row
+                                    },
+                                    onCloseCorrection = {
+                                        correctionFor = null
+                                        onCloseCorrection()
+                                    },
+                                    correctionFor = correctionFor,
                                 )
 
                                 VIEW_PAYMENT -> PaymentPanel(
@@ -800,6 +830,11 @@ private fun ReadingPanel(
     house: House,
     busy: Boolean,
     onRead: (String, String?, Boolean, String, String?) -> Unit,
+    correction: Load<CorrectionAnswer>,
+    onCorrect: (readingId: Int, reason: String) -> Unit,
+    onOpenCorrection: (ReadingLogRow) -> Unit,
+    onCloseCorrection: () -> Unit,
+    correctionFor: ReadingLogRow?,
 ) {
     if (!house.isMetered) {
         MotoCard {
@@ -947,6 +982,23 @@ private fun ReadingPanel(
                                 value = Money.readingPair(row.previous, row.current),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
+
+                            // Only where the office says the door is open: his own reading from today, or any
+                            // reading for a manager. The engine keeps the last word and says so itself.
+                            if (row.correctable) {
+                                TextButton(
+                                    onClick = {
+                                        onCloseCorrection()
+                                        onOpenCorrection(row)
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.correction_action),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -981,6 +1033,17 @@ private fun ReadingPanel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+
+    correctionFor?.let { reading ->
+        CorrectionDialog(
+            label = reading.label,
+            pair = Money.readingPair(reading.previous, reading.current),
+            consumption = reading.consumption,
+            load = correction,
+            onConfirm = { reason -> onCorrect(reading.id, reason) },
+            onClose = onCloseCorrection,
+        )
     }
 
     if (estimatedOpen) {

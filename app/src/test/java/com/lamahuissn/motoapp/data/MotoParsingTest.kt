@@ -163,6 +163,55 @@ class MotoParsingTest {
     }
 
     @Test
+    fun `a reading says whether this phone may correct it`() {
+        val body = """
+            {"house":{"id":9,"name":"بيت العيّنة","phone":null,"type":"metered","status":"active",
+             "area_name":"شارع السيسو","meter_no":"M-9001","exempt":false,"exempt_reason":null,"flat_fee":null,
+             "maintenance_fee":"0.00","discount_percent":"0.00","balance":"16.50","credit":"0.00",
+             "unpaid_months":[],"unpaid_months_count":0,"period_invoiced":true,"reading_done":true,
+             "reading_value":"66.00","reading_estimated":false,"previous_value":"15.00",
+             "readings":[
+               {"id":31,"period":"2026-10","label":"تشرين الأول 2026","previous":"15.00","current":"66.00",
+                "consumption":"51.00","estimated":false,"reader":"سليم ميعاري","read_on":"2026-10-06",
+                "entered_by":3,"correctable":true},
+               {"id":30,"period":"2026-09","label":"أيلول 2026","previous":"10.00","current":"15.00",
+                "consumption":"5.00","estimated":false,"reader":"سليم ميعاري","read_on":"2026-09-06",
+                "entered_by":3,"correctable":false}]}}
+            """.trimIndent()
+
+        val readings = MotoApi.parseHouseBody(body)!!.readings
+
+        // The office answers who may correct what — a floor, not a promise: a paid invoice is still refused
+        // by the engine when the tap lands.
+        assertTrue(readings[0].correctable)
+        assertFalse(readings[1].correctable)
+
+        // And an old answer (no such key) reads as «the door is shut», never as «yes».
+        assertFalse(MotoApi.parseHouseBody(body.replace("\"correctable\":true", "\"correctable\":null"))!!.readings[0].correctable)
+    }
+
+    @Test
+    fun `a correction answer carries what went and the new balance`() {
+        val answer = MotoApi.parseCorrection(
+            """{"corrected":{"id":31,"period":"2026-10","label":"تشرين الأول 2026","previous":"15.00",
+                "current":"66.00","consumption":"51.00","bill_number":"INV-2026-10-0023","bill_total":"45.00"},
+                "house":{"id":23,"balance":"61.50","credit":"0.00"},"replay":false}""",
+        )
+
+        assertNotNull(answer)
+        assertEquals("تشرين الأول 2026", answer!!.label)
+        assertEquals("66.00", answer.current)
+        assertEquals("INV-2026-10-0023", answer.billNumber)
+        assertEquals("45.00", answer.billTotal)
+
+        // The office's figure for the household after the invoice went — never the phone's subtraction.
+        assertEquals("61.50", answer.houseBalance)
+
+        assertNull(MotoApi.parseCorrection("not json at all"))
+        assertNull(MotoApi.parseCorrection("""{"house":{"balance":"1.00"}}"""))
+    }
+
+    @Test
     fun `a house never read says so rather than showing nothing`() {
         val body = """
             {"house":{"id":9,"name":"بيت بلا قراءة","phone":null,"type":"metered","status":"active",
