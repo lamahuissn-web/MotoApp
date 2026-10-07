@@ -338,6 +338,8 @@ data class ReadingLogRow(
      * invoice or a reading with no invoice is still refused by the engine, in its own words.
      */
     val correctable: Boolean = false,
+    /** «أُكِّدت بعد تحذير»: the office asked about this number and somebody answered (spec 013). */
+    val anomalyConfirmed: Boolean = false,
 )
 
 /** What one receipt cleared, month by month — what a household disputes. */

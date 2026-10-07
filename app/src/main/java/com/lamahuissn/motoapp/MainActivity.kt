@@ -247,6 +247,11 @@ private fun MotoApp(model: MotoViewModel) {
                 onCloseReversal = model::clearReversal,
                 // Which receipts are his own to send again — the endpoint's rule, drawn ahead of the tap.
                 myId = session?.user?.id,
+                // Only the questions about THIS house: the man is standing in it.
+                readingQuestions = queue.filter {
+                    it.isOpen && it.question != null && it.houseId == current.houseId
+                },
+                onAnswerQuestion = model::answerReadingQuestion,
                 correction = correction,
                 onCorrect = model::correctReading,
                 onCloseCorrection = model::clearCorrection,

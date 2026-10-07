@@ -62,6 +62,15 @@ data class QueuedWrite(
     val state: QueueState = QueueState.Recorded,
     val lastError: String? = null,
     val receiptText: String? = null,
+    /**
+     * The office found this reading strange and asked about it (spec 013).
+     *
+     * A QUESTION, not a refusal: the row stays owed, the sentence is shown where the reading was typed,
+     * and when the collector says the number is right the row goes out again carrying
+     * [confirmedAnomaly] — «نعم، أنا متأكد».
+     */
+    val question: String? = null,
+    val confirmedAnomaly: Boolean = false,
 ) {
     enum class Kind { Reading, Collection }
 
@@ -115,7 +124,9 @@ object WriteQueueCodec {
                     .put("currency", entry.currency ?: JSONObject.NULL)
                     .put("rate", entry.rate ?: JSONObject.NULL)
                     .put("last_error", entry.lastError ?: JSONObject.NULL)
-                    .put("receipt_text", entry.receiptText ?: JSONObject.NULL),
+                    .put("receipt_text", entry.receiptText ?: JSONObject.NULL)
+                    .put("question", entry.question ?: JSONObject.NULL)
+                    .put("confirmed_anomaly", entry.confirmedAnomaly),
             )
         }
 
@@ -165,6 +176,8 @@ object WriteQueueCodec {
             state = json.optString("state").toState(),
             lastError = json.text("last_error"),
             receiptText = json.text("receipt_text"),
+            question = json.text("question"),
+            confirmedAnomaly = json.optBoolean("confirmed_anomaly"),
         )
     }
 
@@ -246,7 +259,31 @@ object QueueDecision {
     fun afterRefusal(entry: QueuedWrite, message: String?): QueuedWrite = entry.copy(
         state = QueueState.NeedsReconciliation,
         lastError = message,
+        question = null,
     )
+
+    /**
+     * The office found it strange and asked (spec 013) — a question, not a refusal.
+     *
+     * The row stays OWED (no collector is being blamed and nothing is lost), and the sentence is kept so the
+     * screen where he typed the number can put it in front of him. Nothing is sent again until he answers:
+     * a second flush would otherwise ask the same question forever.
+     */
+    fun afterQuestion(entry: QueuedWrite, message: String): QueuedWrite = entry.copy(
+        state = QueueState.Waiting,
+        question = message,
+        lastError = null,
+    )
+
+    /** «الرقم صحيح»: the row goes out again carrying the confirmation, and the question is answered. */
+    fun afterAnswering(entry: QueuedWrite): QueuedWrite = entry.copy(
+        question = null,
+        confirmedAnomaly = true,
+    )
+
+    /** The rows waiting on a question from the office, for whoever is holding this phone. */
+    fun questions(entries: List<QueuedWrite>): List<QueuedWrite> =
+        entries.filter { it.isOpen && it.question != null }
 
     /** No answer at all: the key stays, and the next flush is the same attempt. */
     fun afterUnreachable(entry: QueuedWrite, trouble: String): QueuedWrite = entry.copy(
@@ -262,7 +299,11 @@ object QueueDecision {
      * queue from being sent into the same dead spot, and none of them loses its place.
      */
     fun continueAfter(entry: QueuedWrite): Boolean =
-        entry.state == QueueState.Done || entry.state == QueueState.NeedsReconciliation
+        entry.state == QueueState.Done ||
+            entry.state == QueueState.NeedsReconciliation ||
+            // A question is an ANSWER: the office replied, so the road is fine and the rest of the queue
+            // keeps walking. Only the questioned row waits, and it waits for its collector, not the network.
+            entry.question != null
 
     /** The entries a flush still owes the office, oldest first. Settled and discarded rows stay put. */
     fun openEntries(entries: List<QueuedWrite>): List<QueuedWrite> = entries.filter { it.state.isOpen }

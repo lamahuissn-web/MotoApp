@@ -108,6 +108,45 @@ class QueueDecisionTest {
     }
 
     @Test
+    fun `a question about a reading is not a refusal`() {
+        val asked = QueueDecision.afterQuestion(
+            entry(kind = QueuedWrite.Kind.Reading),
+            "قراءة كبيرة: الاستهلاك 400 كيلوواط ومعدّل البيت 100.",
+        )
+
+        // Still owed — nothing is lost and nobody is blamed — and the office's own sentence is kept so the
+        // screen where the number was typed can put it in front of him (spec 013).
+        assertEquals(QueueState.Waiting, asked.state)
+        assertTrue(asked.isOpen)
+        assertNull(asked.lastError)
+        assertTrue(asked.question!!.contains("400"))
+
+        // The road is fine (the office ANSWERED), so the rest of the queue keeps walking.
+        assertTrue(QueueDecision.continueAfter(asked))
+    }
+
+    @Test
+    fun `answering the question sends the row again with the collector's word`() {
+        val asked = QueueDecision.afterQuestion(entry(kind = QueuedWrite.Kind.Reading), "سؤال")
+        val answered = QueueDecision.afterAnswering(asked)
+
+        assertNull(answered.question)          // the question is answered, and asked once
+        assertTrue(answered.confirmedAnomaly)   // the row travels with «نعم، أنا متأكد»
+        assertTrue(answered.isOpen)             // it is owed until the office accepts it
+
+        // And a refusal still behaves like a refusal: only a question is answered this way.
+        assertNull(QueueDecision.afterRefusal(asked, "رفض").question)
+    }
+
+    @Test
+    fun `the questions waiting on him are the ones carrying the office's words`() {
+        val questioned = QueueDecision.afterQuestion(entry(key = "moto-questioned-0001"), "سؤال")
+        val ordinary = entry(key = "moto-ordinary-0001")
+
+        assertEquals(listOf(questioned), QueueDecision.questions(listOf(ordinary, questioned, QueueDecision.afterSuccess(ordinary, null))))
+    }
+
+    @Test
     fun `the same write pressed twice is recognised as one attempt`() {
         val first = entry()
         val same = first.copy(key = "moto-a-different-key-1")

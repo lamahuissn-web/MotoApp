@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.CorrectionAnswer
 import com.lamahuissn.motoapp.data.House
+import com.lamahuissn.motoapp.data.QueuedWrite
 import com.lamahuissn.motoapp.data.ReadingLogRow
 import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.HouseReceipt
@@ -111,6 +112,8 @@ fun HouseScreen(
     onReverse: (paymentId: Int, reason: String) -> Unit = { _, _ -> },
     onCloseReversal: () -> Unit = {},
     myId: Int? = null,
+    readingQuestions: List<QueuedWrite> = emptyList(),
+    onAnswerQuestion: (QueuedWrite) -> Unit = {},
     correction: Load<CorrectionAnswer> = Load.Idle,
     onCorrect: (readingId: Int, reason: String) -> Unit = { _, _ -> },
     onCloseCorrection: () -> Unit = {},
@@ -230,6 +233,18 @@ fun HouseScreen(
             Alert(
                 text = problem.message,
                 tone = Tone.Danger,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            )
+        }
+
+        // The office asked about a number typed HERE (spec 013): the question is put in front of the man
+        // standing at that meter, one press from «the number is right» — and a number that was wrong has its
+        // door in the queue, where it can be thrown away.
+        readingQuestions.forEach { entry ->
+            QuestionCard(
+                text = entry.question.orEmpty(),
+                onConfirm = { onAnswerQuestion(entry) },
+                onOpenQueue = onOpenQueue,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
         }
@@ -1004,6 +1019,16 @@ private fun ReadingPanel(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             row.consumption?.let {
                                 MicroLabel(stringResource(R.string.reading_kwh, it))
+                            }
+
+                            // The office asked about this number and somebody answered (spec 013): a
+                            // supervisor glancing at a house should see which months were waved through.
+                            if (row.anomalyConfirmed) {
+                                Spacer(Modifier.width(8.dp))
+                                Badge(
+                                    text = stringResource(R.string.reading_confirmed_badge),
+                                    tone = Tone.Warning,
+                                )
                             }
 
                             if (row.estimated) {

@@ -167,6 +167,31 @@ class WriteQueueStoreTest {
     }
 
     @Test
+    fun `a question and its answer survive a restart`() {
+        val questioned = QueuedWrite(
+            kind = QueuedWrite.Kind.Reading,
+            key = "moto-question-0001",
+            userId = 1,
+            houseId = 10,
+            houseName = "بيت أبو علي",
+            createdAt = "2026-10-07T09:00:00",
+            period = "2026-10",
+            currentReading = "3600",
+            state = QueueState.Waiting,
+            question = "قراءة كبيرة: الاستدلال",
+            confirmedAnomaly = true,
+        )
+
+        val back = WriteQueueCodec.decode(WriteQueueCodec.encode(listOf(questioned))).single()
+
+        // The collector's own answer AND the office's question both live in the file: a phone killed on the
+        // way to the office must not lose either — and must not ask the same question twice (spec 013).
+        assertTrue(back.confirmedAnomaly)
+        assertEquals("قراءة كبيرة: الاستدلال", back.question)
+        assertEquals("3600", back.currentReading)
+    }
+
+    @Test
     fun `a value that is JSON null is nothing, not the word null`() {
         val encoded = WriteQueueCodec.encode(listOf(collection.copy(note = null, receiptText = null)))
 

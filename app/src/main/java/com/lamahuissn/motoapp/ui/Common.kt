@@ -1126,3 +1126,60 @@ fun CorrectionDialog(
         )
     }
 }
+
+/**
+ * The office's question about a number (spec 013).
+ *
+ * It sits on the screen where the number was typed, because that is where the man who can still walk back to
+ * the meter is standing. The row itself stays owed until he answers — «نعم» sends it again carrying his word,
+ * and the other door is the queue, where a wrong number can be thrown away.
+ */
+@Composable
+fun QuestionCard(
+    text: String,
+    onConfirm: () -> Unit,
+    onOpenQueue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MotoCard(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Tile(tone = Tone.Warning, size = 34.dp) {
+                Text(text = "؟", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.question_title),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(Modifier.height(4.dp))
+                // The office's own sentence, numbers and all: the average is what tells him whether he
+                // mistyped a digit or the house really changed.
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlineButton(
+            text = stringResource(R.string.question_confirm),
+            onClick = onConfirm,
+            modifier = Modifier.fillMaxWidth(),
+            tone = Tone.Warning,
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlineButton(
+            text = stringResource(R.string.question_open_queue),
+            onClick = onOpenQueue,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}

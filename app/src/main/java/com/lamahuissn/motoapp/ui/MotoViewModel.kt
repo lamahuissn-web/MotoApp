@@ -971,6 +971,20 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     /* --------------------------------------------------------------- the queue */
 
     /**
+     * «الرقم صحيح» — the collector answers the office's question about a reading (spec 013).
+     *
+     * The answer is written on the row (so it survives a restart, and so the same question is never asked
+     * twice), then the row goes out again carrying it. Nothing here decides whether the number was right:
+     * he said it was, and the office's own gate re-opens for exactly this row.
+     */
+    fun answerReadingQuestion(entry: QueuedWrite) {
+        val answered = QueueDecision.afterAnswering(entry)
+        update(answered)
+
+        walk(listOf(answered), report = true)
+    }
+
+    /**
      * Send these rows, oldest first, and write down what the office said about each.
      *
      * `report` is for a write the collector is watching: he gets the office's own answer on screen. The

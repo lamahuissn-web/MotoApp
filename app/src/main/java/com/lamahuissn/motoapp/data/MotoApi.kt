@@ -266,6 +266,11 @@ object MotoApi {
         currentReading: String,
         note: String?,
         key: String,
+        /**
+         * «نعم، أنا متأكد» (spec 013): the collector was shown the office's question about this number and
+         * answered it. Without it the engine refuses to bill a jump or a zero — and says why.
+         */
+        confirmedAnomaly: Boolean = false,
     ): ApiCall<ReadingAnswer> = money(
         endpoint = "readings",
         token = token,
@@ -275,6 +280,7 @@ object MotoApi {
             .put("period", period)
             .put("current_reading", currentReading)
             .also { if (! note.isNullOrBlank()) it.put("note", note) }
+            .also { if (confirmedAnomaly) it.put("confirmed_anomaly", true) }
             .toString(),
         parse = { parseReading(it) },
     )
@@ -675,6 +681,7 @@ object MotoApi {
                 reader = row.optString("reader").takeIf { it.isNotEmpty() && it != "null" },
                 readOn = row.optString("read_on").takeIf { it.isNotEmpty() && it != "null" },
                 correctable = row.optBoolean("correctable"),
+                anomalyConfirmed = row.optBoolean("anomaly_confirmed"),
             )
         }
     }

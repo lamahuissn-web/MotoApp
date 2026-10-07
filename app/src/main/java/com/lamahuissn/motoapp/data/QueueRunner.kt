@@ -102,8 +102,15 @@ object QueueRunner {
     fun settleTo(entry: QueuedWrite, call: ApiCall<*>): QueuedWrite = when (call) {
         is ApiCall.Success<*> -> QueueDecision.afterSuccess(entry, (call.value as? CollectionAnswer)?.receiptText)
 
-        is ApiCall.Refused -> when (call.answer.code) {
-            "unauthenticated", "account_disabled" -> QueueDecision.afterUnreachable(entry, call.answer.message.orEmpty())
+        is ApiCall.Refused -> when {
+            call.answer.code.orEmpty() in listOf("unauthenticated", "account_disabled") ->
+                QueueDecision.afterUnreachable(entry, call.answer.message.orEmpty())
+
+            // A question about a reading (spec 013) is not a refusal: the row stays owed, and the sentence
+            // travels back to the screen where the number was typed. The office's words are the warning.
+            call.answer.code.orEmpty().startsWith("refuse.anomaly_") ->
+                QueueDecision.afterQuestion(entry, call.answer.message.orEmpty())
+
             else -> QueueDecision.afterRefusal(entry, call.answer.message)
         }
 
@@ -131,6 +138,7 @@ object QueueRunner {
                 currentReading = entry.currentReading.orEmpty(),
                 note = entry.note,
                 key = entry.key,
+                confirmedAnomaly = entry.confirmedAnomaly,
             )
         }
 

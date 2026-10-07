@@ -152,6 +152,11 @@
     <string name="correction_second_confirm">نعم، احذف القراءة</string>
     <string name="correction_done">أُزيلت قراءة %1$s وفاتورتها %2$s — أدخل القراءة الصحيحة.</string>
     <string name="correction_done_no_bill">أُزيلت قراءة %1$s — أدخل القراءة الصحيحة.</string>
+    <!-- القراءة المشكوكة (spec 013): الخادم يسأل، والجابي يجيب عند الباب -->
+    <string name="question_title">هذه القراءة تنتظر تأكيدك</string>
+    <string name="question_confirm">الرقم صحيح — أرسلها</string>
+    <string name="question_open_queue">افتح الطابور</string>
+    <string name="reading_confirmed_badge">أُكِّدت بعد تحذير</string>
     <string name="correction_balance_after">رصيد البيت الآن: %1$s</string>
     <string name="app_version">MotoApp %1$s</string>
     <string name="house_no_readings">لا قراءات سابقة على هذا العدّاد.</string>

@@ -173,7 +173,7 @@ class MotoParsingTest {
              "readings":[
                {"id":31,"period":"2026-10","label":"تشرين الأول 2026","previous":"15.00","current":"66.00",
                 "consumption":"51.00","estimated":false,"reader":"سليم ميعاري","read_on":"2026-10-06",
-                "entered_by":3,"correctable":true},
+                "entered_by":3,"correctable":true,"anomaly_confirmed":true},
                {"id":30,"period":"2026-09","label":"أيلول 2026","previous":"10.00","current":"15.00",
                 "consumption":"5.00","estimated":false,"reader":"سليم ميعاري","read_on":"2026-09-06",
                 "entered_by":3,"correctable":false}]}}
@@ -185,6 +185,10 @@ class MotoParsingTest {
         // by the engine when the tap lands.
         assertTrue(readings[0].correctable)
         assertFalse(readings[1].correctable)
+
+        // A month somebody confirmed after the office questioned it (spec 013), and one nobody did.
+        assertTrue(readings[0].anomalyConfirmed)
+        assertFalse(readings[1].anomalyConfirmed)
 
         // And an old answer (no such key) reads as «the door is shut», never as «yes».
         assertFalse(MotoApi.parseHouseBody(body.replace("\"correctable\":true", "\"correctable\":null"))!!.readings[0].correctable)
