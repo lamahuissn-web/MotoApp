@@ -78,6 +78,7 @@ class OfflineCache(private val root: File) {
     companion object {
         const val DIR = "offline"
         const val BOARD = "board"
+        const val WALLET = "wallet"
 
         fun sheet(areaId: Int) = "sheet-$areaId"
         fun house(houseId: Int) = "house-$houseId"

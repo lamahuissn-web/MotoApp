@@ -98,6 +98,41 @@ data class HandoverAnswer(
     val collectorInHand: String,
 )
 
+/**
+ * A collector's own purse (spec 011) — the screen about HIM rather than about a house.
+ *
+ * Every figure is the office's: the day, the month, and the cash in his pocket are computed by
+ * `CollectorStats` and `CollectionService::inHand` on the server. The phone displays them and never adds
+ * them up — two "today" figures for one man is a dispute, not a report.
+ */
+data class WalletSummary(
+    val name: String,
+    val period: String,
+    val label: String?,
+    val inHand: String,
+    val todayTotal: String,
+    val todayCount: Int,
+    val monthTotal: String,
+    val monthCount: Int,
+    val handedTotal: String,
+    val readingsToday: Int,
+    val readingsCycle: Int,
+    val handovers: List<WalletHandover> = emptyList(),
+) {
+    /** A purse with nothing in it and nothing done — the screen says so instead of a wall of zeroes. */
+    val untouched: Boolean
+        get() = inHand == "0.00" && todayCount == 0 && monthCount == 0 &&
+            handedTotal == "0.00" && readingsToday == 0 && readingsCycle == 0 && handovers.isEmpty()
+}
+
+/** One handover the office signed for. */
+data class WalletHandover(
+    val date: String?,
+    val amount: String,
+    val note: String?,
+    val receivedBy: String?,
+)
+
 /** A receipt that was taken back, as the office recorded it (spec 009, phase C). */
 data class ReversalAnswer(
     val id: Int,

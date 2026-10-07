@@ -26,6 +26,7 @@ import com.lamahuissn.motoapp.data.ReadingAnswer
 import com.lamahuissn.motoapp.data.ReversalAnswer
 import com.lamahuissn.motoapp.data.SearchHit
 import com.lamahuissn.motoapp.data.Session
+import com.lamahuissn.motoapp.data.WalletSummary
 import com.lamahuissn.motoapp.data.TokenVault
 import com.lamahuissn.motoapp.data.WriteQueueStore
 import com.lamahuissn.motoapp.work.QueueNotifier
@@ -47,6 +48,8 @@ sealed interface Screen {
     data object Manager : Screen
     /** The writes the office has not seen yet (spec 010). */
     data object Queue : Screen
+    /** The collector's own purse (spec 011) — the one screen about him rather than about a house. */
+    data object Wallet : Screen
     data class Houses(val areaId: Int, val areaName: String) : Screen
     data class House(val areaId: Int, val areaName: String, val houseId: Int) : Screen
 }
@@ -301,6 +304,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         _sheet.value = Load.Idle
         _house.value = Load.Idle
         _manager.value = Load.Idle
+        _wallet.value = Load.Idle
         _search.value = Load.Idle
         _problem.value = null
         _outcome.value = null
@@ -341,6 +345,59 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (_manager.value !is Load.Ready) {
                     _manager.value = Load.Failed(_problem.value?.message)
+                }
+            }
+        }
+    }
+
+    /**
+     * The collector's own purse (spec 011).
+     *
+     * Read on open and on pull-to-refresh like every other screen, and kept for a day without signal with
+     * the time it was read — an old figure labelled as old is better than a blank screen, and the office
+     * decides the money at write time anyway.
+     */
+    private val _wallet = MutableStateFlow<Load<WalletSummary>>(Load.Idle)
+    val wallet: StateFlow<Load<WalletSummary>> = _wallet.asStateFlow()
+
+    fun openWallet() {
+        _screen.value = Screen.Wallet
+        loadWallet()
+    }
+
+    fun loadWallet() {
+        if (_wallet.value !is Load.Ready) {
+            _wallet.value = Load.Busy
+        }
+
+        _problem.value = null
+
+        viewModelScope.launch { readWallet() }
+    }
+
+    private suspend fun readWallet() {
+        val token = _session.value?.token ?: return
+        val me = _session.value?.user?.id ?: return
+
+        when (val call = MotoApi.wallet(token, sink = { offline.put(me, OfflineCache.WALLET, it) })) {
+            is ApiCall.Success -> {
+                _staleAsOf.value = null
+                _wallet.value = Load.Ready(call.value)
+            }
+
+            else -> {
+                _problem.value = problem(call)
+
+                // Only when the session holds nothing: a live answer is never overwritten by an older copy.
+                if (_wallet.value !is Load.Ready) {
+                    val stored = offline.body(me, OfflineCache.WALLET)?.let { MotoApi.parseWalletBody(it) }
+
+                    if (stored != null) {
+                        _staleAsOf.value = offline.storedAt(me, OfflineCache.WALLET)
+                        _wallet.value = Load.Ready(stored)
+                    } else {
+                        _wallet.value = Load.Failed(_problem.value?.message)
+                    }
                 }
             }
         }
@@ -467,6 +524,12 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
             true
         }
 
+        // A tab, not a step: back from the purse goes to where a collector walks from.
+        Screen.Wallet -> {
+            openAreas()
+            true
+        }
+
         Screen.Areas -> {
             if (_session.value?.user?.isAdmin == true) {
                 backFromAreas()
@@ -523,6 +586,7 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
                 when (val current = _screen.value) {
                     Screen.Manager -> readManager()
                     Screen.Queue -> flushNow()
+                    Screen.Wallet -> readWallet()
                     is Screen.Houses -> readSheet(current.areaId)
                     is Screen.House -> readHouse(current.houseId)
                     Screen.Login -> Unit

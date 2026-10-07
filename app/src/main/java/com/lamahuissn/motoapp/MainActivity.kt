@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Place
@@ -50,6 +51,7 @@ import com.lamahuissn.motoapp.ui.ManagerScreen
 import com.lamahuissn.motoapp.ui.MotoViewModel
 import com.lamahuissn.motoapp.ui.QueueScreen
 import com.lamahuissn.motoapp.ui.Screen
+import com.lamahuissn.motoapp.ui.WalletScreen
 import com.lamahuissn.motoapp.ui.theme.MotoAppTheme
 
 /**
@@ -120,6 +122,7 @@ private fun MotoApp(model: MotoViewModel) {
     val refreshing by model.refreshing.collectAsState()
     val queue by model.queue.collectAsState()
     val reversal by model.reversal.collectAsState()
+    val wallet by model.wallet.collectAsState()
 
     // The phone should be able to tell him, unopened, that his recorded work has not reached the office
     // (spec 010). Asked once, from Android 13 up; a refusal costs the notifications and nothing else.
@@ -148,7 +151,8 @@ private fun MotoApp(model: MotoViewModel) {
 
     // The bar is for the screens somebody lives in; a house, a sheet or the queue's own detail is a step
     // under them, and a bar there would be a door back to where he already is.
-    val topLevel = screen is Screen.Areas || screen is Screen.Manager || screen is Screen.Queue
+    val topLevel = screen is Screen.Areas || screen is Screen.Manager ||
+        screen is Screen.Queue || screen is Screen.Wallet
     val owed = queue.count { it.isOpen }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -242,6 +246,19 @@ private fun MotoApp(model: MotoViewModel) {
             )
         }
 
+        Screen.Wallet -> {
+            // The collector's own purse — no bar item for a manager reaches it, but the branch is total.
+            WalletScreen(
+                load = wallet,
+                problem = problem,
+                onRefresh = model::loadWallet,
+                onSignOut = model::signOut,
+                staleAsOf = staleAsOf,
+                refreshing = refreshing,
+                onPullRefresh = model::refresh,
+            )
+        }
+
         Screen.Manager -> {
             val manager by model.manager.collectAsState()
             val handover by model.handover.collectAsState()
@@ -274,6 +291,7 @@ private fun MotoApp(model: MotoViewModel) {
                 owed = owed,
                 onManager = model::openBoard,
                 onAreas = model::openAreas,
+                onWallet = model::openWallet,
                 onQueue = model::openQueue,
             )
         }
@@ -297,6 +315,7 @@ private fun MotoBottomBar(
     owed: Int,
     onManager: () -> Unit,
     onAreas: () -> Unit,
+    onWallet: () -> Unit,
     onQueue: () -> Unit,
 ) {
     Column {
@@ -322,6 +341,17 @@ private fun MotoBottomBar(
                 icon = { Icon(Icons.Filled.Place, contentDescription = null) },
                 label = { Text(stringResource(R.string.areas_section)) },
             )
+
+            if (!manager) {
+                // «محفظتي» is the collector's own money: a manager has his board, and no pocket in these
+                // books, so the door is not drawn for him at all.
+                NavigationBarItem(
+                    selected = current is Screen.Wallet,
+                    onClick = onWallet,
+                    icon = { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null) },
+                    label = { Text(stringResource(R.string.wallet_subtitle)) },
+                )
+            }
 
             NavigationBarItem(
                 selected = current is Screen.Queue,

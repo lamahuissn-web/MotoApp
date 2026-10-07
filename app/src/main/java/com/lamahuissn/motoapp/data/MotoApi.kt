@@ -127,6 +127,20 @@ object MotoApi {
     ) { parseManagerBoard(it) }
 
     /**
+     * The signed-in user's own purse (spec 011) — his cash, his day, his readings, his handovers.
+     *
+     * Answered about whoever holds the token: the call carries no id, so a collector cannot ask about
+     * another man's cash even by mistake.
+     */
+    suspend fun wallet(token: String, period: String? = null, sink: ((String) -> Unit)? = null): ApiCall<WalletSummary> = call(
+        Request.Builder().url("$baseUrl/api/v1/me/summary${periodQuery(period)}").authorized(token).build(),
+    ) { body ->
+        // The office's own answer, as it arrived, is what the phone keeps for a day without signal.
+        sink?.invoke(body)
+        parseWallet(body)
+    }
+
+    /**
      * A collector hands cash to the office (spec 009, phase B) — the one write a manager's phone makes.
      *
      * It needs a key like every money write: a manager who taps «تأكيد» twice, or a request answered by a
@@ -392,6 +406,45 @@ object MotoApi {
             date = handover.optString("handover_date"),
             note = handover.optString("note").takeIf { it.isNotEmpty() && it != "null" },
             collectorInHand = row.optString("collector_in_hand"),
+        )
+    }
+
+    fun parseWalletBody(body: String): WalletSummary? = parseWallet(body)
+
+    /** The collector's purse, or nothing if the office did not send one. */
+    fun parseWallet(body: String): WalletSummary? {
+        val row = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val user = row.optJSONObject("user") ?: return null
+        val money = row.optJSONObject("money") ?: return null
+        val readings = row.optJSONObject("readings")
+        val handovers = row.optJSONArray("handovers")
+
+        return WalletSummary(
+            name = user.optString("name"),
+            period = row.optString("period"),
+            label = row.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+            inHand = money.optString("in_hand"),
+            todayTotal = money.optString("today_total"),
+            todayCount = money.optInt("today_count"),
+            monthTotal = money.optString("month_total"),
+            monthCount = money.optInt("month_count"),
+            handedTotal = money.optString("handed_total"),
+            readingsToday = readings?.optInt("today") ?: 0,
+            readingsCycle = readings?.optInt("cycle") ?: 0,
+            handovers = if (handovers == null) {
+                emptyList()
+            } else {
+                (0 until handovers.length()).map { i ->
+                    val h = handovers.getJSONObject(i)
+
+                    WalletHandover(
+                        date = h.optString("date").takeIf { it.isNotEmpty() && it != "null" },
+                        amount = h.optString("amount"),
+                        note = h.optString("note").takeIf { it.isNotEmpty() && it != "null" },
+                        receivedBy = h.optString("received_by").takeIf { it.isNotEmpty() && it != "null" },
+                    )
+                }
+            },
         )
     }
 

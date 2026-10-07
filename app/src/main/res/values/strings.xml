@@ -17,6 +17,14 @@
     <string name="notif_channel">الطابور</string>
     <string name="notif_waiting_title">عمليات لم يصل المكتب بعد</string>
     <string name="notif_delivered_title">وصل المكتب</string>
+    <plurals name="wallet_operations">
+        <item quantity="zero">لا عمليات</item>
+        <item quantity="one">عملية واحدة</item>
+        <item quantity="two">عمليتان</item>
+        <item quantity="few">%1$d عمليات</item>
+        <item quantity="many">%1$d عملية</item>
+        <item quantity="other">%1$d عملية</item>
+    </plurals>
     <plurals name="notif_waiting_text">
         <item quantity="zero">لا شيء معلّق</item>
         <item quantity="one">عملية واحدة معلّقة — ستُرسَل عند رجوع الشبكة</item>
@@ -262,6 +270,16 @@
     <string name="stats_today">المحصل اليوم</string>
     <string name="stats_month">هذا الشهر</string>
     <string name="cash_in_hand">نقدية بذمتك</string>
+    <!-- محفظتي (spec 011): شاشة الجابي عن نفسه -->
+    <string name="wallet_subtitle">محفظتي</string>
+    <string name="wallet_failed_title">تعذّر عرض محفظتك</string>
+    <string name="wallet_today">اليوم</string>
+    <string name="wallet_month">هذا الشهر</string>
+    <string name="wallet_readings">قراءاتي</string>
+    <string name="wallet_cycle">هذه الدورة</string>
+    <string name="wallet_handovers">آخر تسليماتي</string>
+    <string name="wallet_received_by">استلمه %1$s</string>
+    <string name="wallet_none">لا حركة بعد — لا قبض ولا تسليم.</string>
     <string name="cash_handed_line">سلّمت للمولّد حتى الآن %1$s</string>
     <string name="required_badge">مطلوب</string>
     <string name="search_placeholder">ابحث عن أي مشترك — بالاسم أو رقم العدّاد أو الهاتف</string>
