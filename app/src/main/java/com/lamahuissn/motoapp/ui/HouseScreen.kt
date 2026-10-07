@@ -885,6 +885,63 @@ private fun ReadingPanel(
         )
     }
 
+    // Every month this meter has been read — the log the panel keeps in the file, and the one a household
+    // argues about. It is here, under the input, because the collector needs last month's figure while he
+    // types this month's, and because «القراءة السابقة» on its own answers only the last one.
+    if (house.readings.isNotEmpty()) {
+        Spacer(Modifier.height(18.dp))
+        SectionHeading(stringResource(R.string.house_readings))
+
+        MotoCard(padding = 14.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                house.readings.forEachIndexed { index, row ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(row.label, style = MaterialTheme.typography.bodyMedium)
+                                MicroLabel(listOfNotNull(row.reader, row.readOn).joinToString(" · "))
+                            }
+
+                            Amount(
+                                value = Money.readingPair(row.previous, row.current),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            row.consumption?.let {
+                                MicroLabel(stringResource(R.string.reading_kwh, it))
+                            }
+
+                            if (row.estimated) {
+                                Spacer(Modifier.width(8.dp))
+                                Badge(
+                                    text = stringResource(R.string.reading_estimated_badge),
+                                    tone = Tone.Warning,
+                                )
+                            }
+                        }
+                    }
+
+                    if (index != house.readings.lastIndex) {
+                        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+    } else {
+        Spacer(Modifier.height(18.dp))
+        SectionHeading(stringResource(R.string.house_readings))
+
+        MotoCard(padding = 14.dp) {
+            Text(
+                text = stringResource(R.string.house_no_readings),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
     if (estimatedOpen) {
         EstimatedReadingDialog(
             house = house,

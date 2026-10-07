@@ -130,6 +130,49 @@ class MotoParsingTest {
     }
 
     @Test
+    fun `the meter log parses with its pair, its burn and its estimate flag`() {
+        val body = """
+            {"house":{"id":9,"name":"بيت العيّنة","phone":null,"type":"metered","status":"active",
+             "area_name":"شارع السيسو","meter_no":"M-9001","exempt":false,"exempt_reason":null,"flat_fee":null,
+             "maintenance_fee":"0.00","discount_percent":"0.00","balance":"16.50","credit":"0.00",
+             "unpaid_months":[],"unpaid_months_count":0,"period_invoiced":true,"reading_done":true,
+             "reading_value":"66.00","reading_estimated":false,"previous_value":"15.00",
+             "readings":[
+               {"id":31,"period":"2026-10","label":"تشرين الأول 2026","previous":"15.00","current":"66.00",
+                "consumption":"51.00","estimated":false,"reader":"سليم ميعاري","read_on":"2026-10-06"},
+               {"id":30,"period":"2026-09","label":"أيلول 2026","previous":"10.00","current":"15.00",
+                "consumption":"5.00","estimated":true,"reader":"سليم ميعاري","read_on":"2026-09-06"}]}}
+            """.trimIndent()
+
+        val house = MotoApi.parseHouseBody(body)!!
+
+        assertEquals(2, house.readings.size)
+        assertEquals("تشرين الأول 2026", house.readings[0].label)
+        assertEquals("15.00", house.readings[0].previous)
+        assertEquals("66.00", house.readings[0].current)
+        assertEquals("51.00", house.readings[0].consumption)
+        assertFalse(house.readings[0].estimated)
+
+        // An estimated month is a different fact from a month somebody stood at the meter, and the log says
+        // which one it is holding.
+        assertTrue(house.readings[1].estimated)
+        assertEquals("2026-09", house.readings[1].period)
+    }
+
+    @Test
+    fun `a house never read says so rather than showing nothing`() {
+        val body = """
+            {"house":{"id":9,"name":"بيت بلا قراءة","phone":null,"type":"metered","status":"active",
+             "area_name":"شارع السيسو","meter_no":"M1","exempt":false,"exempt_reason":null,"flat_fee":null,
+             "maintenance_fee":"0.00","discount_percent":"0.00","balance":"0.00","credit":"0.00",
+             "unpaid_months":[],"unpaid_months_count":0,"period_invoiced":false,"reading_done":false,
+             "reading_value":null,"reading_estimated":false,"previous_value":"0.00","readings":[]}}
+            """.trimIndent()
+
+        assertEquals(0, MotoApi.parseHouseBody(body)!!.readings.size)
+    }
+
+    @Test
     fun `a file written before the receipts log existed still reads`() {
         // What the phone holds from an older answer (or an old offline copy): no `payments` key at all.
         val body = """

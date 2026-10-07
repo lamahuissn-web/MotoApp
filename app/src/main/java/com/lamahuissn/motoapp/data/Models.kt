@@ -209,6 +209,13 @@ data class House(
      * and which months it cleared. Empty for a house that never paid, and empty on the cards in a list.
      */
     val payments: List<HouseReceipt> = emptyList(),
+    /**
+     * Every month this meter has been read, newest first — only the file carries them.
+     *
+     * A household argues about a reading more often than about anything else, and the collector standing at
+     * the meter needs last month's figure while he types this month's.
+     */
+    val readings: List<ReadingLogRow> = emptyList(),
 ) {
     val isMetered: Boolean get() = type == "metered"
     val isFlat: Boolean get() = type == "flat_rate"
@@ -222,6 +229,19 @@ data class House(
 }
 
 data class UnpaidMonth(val period: String, val label: String, val remaining: String, val type: String)
+
+/** One month of the meter's log (spec 009, phase D): the pair, what it burned, and whether it was an estimate. */
+data class ReadingLogRow(
+    val id: Int,
+    val period: String,
+    val label: String,
+    val previous: String,
+    val current: String,
+    val consumption: String?,
+    val estimated: Boolean,
+    val reader: String?,
+    val readOn: String?,
+)
 
 /** What one receipt cleared, month by month — what a household disputes. */
 data class SettledLine(val period: String?, val label: String?, val amount: String)

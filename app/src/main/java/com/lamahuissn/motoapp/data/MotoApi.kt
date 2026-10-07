@@ -506,7 +506,28 @@ object MotoApi {
         previousValue = row.optString("previous_value"),
         bills = row.optJSONArray("bills").toBills(),
         payments = row.optJSONArray("payments").toReceipts(),
+        readings = row.optJSONArray("readings").toReadings(),
     )
+
+    private fun JSONArray?.toReadings(): List<ReadingLogRow> {
+        if (this == null) return emptyList()
+
+        return (0 until length()).map { i ->
+            val row = getJSONObject(i)
+
+            ReadingLogRow(
+                id = row.optInt("id"),
+                period = row.optString("period"),
+                label = row.optString("label").takeIf { it.isNotEmpty() && it != "null" } ?: row.optString("period"),
+                previous = row.optString("previous"),
+                current = row.optString("current"),
+                consumption = row.optString("consumption").takeIf { it.isNotEmpty() && it != "null" },
+                estimated = row.optBoolean("estimated"),
+                reader = row.optString("reader").takeIf { it.isNotEmpty() && it != "null" },
+                readOn = row.optString("read_on").takeIf { it.isNotEmpty() && it != "null" },
+            )
+        }
+    }
 
     private fun JSONArray?.toReceipts(): List<HouseReceipt> {
         if (this == null) return emptyList()

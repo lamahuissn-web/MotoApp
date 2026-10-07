@@ -157,6 +157,15 @@ object Money {
 
     fun liraRate(value: Double): String = "\u2066" + "1$ = " + value.toLong().toString() + " LBP" + "\u2069"
 
+    /**
+     * A meter's pair as the office says it out loud: «15 → 66».
+     *
+     * Isolated and left-to-right for the same reason every other figure is: inside an Arabic sentence the
+     * arrow would otherwise be re-ordered around the numbers and read as «66 ← 15».
+     */
+    fun readingPair(previous: String, current: String): String =
+        "\u2066" + previous + " → " + current + "\u2069"
+
     /** The office's rate as a field shows it: `90000`, not `90000.0`. */
     fun rateText(value: Double): String =
         if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
