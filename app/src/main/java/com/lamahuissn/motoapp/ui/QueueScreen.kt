@@ -278,14 +278,3 @@ private fun QueueRow(
 
 /** `2026-10-05T18:25:11` as «اليوم 18:25» or «2026-10-04 18:25» — enough to place it in a day. */
 private fun clock(createdAt: String): String = clockText(createdAt)
-
-/** The receipt as words, handed to the household's own phone — the same way the house screen does it. */
-private fun shareReceipt(context: Context, receipt: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.receipt_heading))
-        putExtra(Intent.EXTRA_TEXT, receipt)
-    }
-
-    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_receipt)))
-}

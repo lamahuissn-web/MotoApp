@@ -103,7 +103,7 @@ class MotoParsingTest {
              "payments":[
                {"id":41,"number":"PAY-2026-10-0009","amount":"20.00","method":"cash_usd",
                 "method_label":"نقداً دولار","collected_on":"2026-10-06","created_at":"2026-10-06T10:00:00+03:00",
-                "collector":"سليم ميعاري","note":null,"lbp_amount":null,"lbp_rate":null,
+                "collector":"سليم ميعاري","collector_id":3,"note":null,"lbp_amount":null,"lbp_rate":null,
                 "settled":[{"period":"2026-10","label":"تشرين الأول 2026","amount":"20.00"}]},
                {"id":40,"number":"PAY-2026-10-0008","amount":"15.00","method":"cash_lbp",
                 "method_label":"نقداً ليرة","collected_on":"2026-10-05","created_at":"2026-10-05T09:00:00+03:00",
@@ -118,6 +118,9 @@ class MotoParsingTest {
         assertEquals("تشرين الأول 2026", house.payments[0].settled[0].label)
         assertEquals("20.00", house.payments[0].settled[0].amount)
         assertEquals("سليم ميعاري", house.payments[0].collector)
+
+        // Whose receipt it is, by id: the app decides from this whether it may send it again (spec 011 §8).
+        assertEquals(3, house.payments[0].collectorId)
 
         // A receipt that cleared nothing yet is still a receipt: it is money the office holds.
         assertEquals(0, house.payments[1].settled.size)

@@ -490,6 +490,35 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * A receipt he wants to send again (spec 011 §8).
+     *
+     * The words are the office's, fetched fresh rather than kept on the phone: a receipt is a document, and
+     * a copy that lived in the app for a week is a second version of it. On a failure the office's own
+     * sentence is what the screen shows — the tap has to say something either way.
+     */
+    private val _receiptToShare = MutableStateFlow<String?>(null)
+    val receiptToShare: StateFlow<String?> = _receiptToShare.asStateFlow()
+
+    fun shareReceiptAgain(paymentId: Int) {
+        val token = _session.value?.token ?: return
+
+        viewModelScope.launch {
+            when (val call = MotoApi.receiptText(token, paymentId)) {
+                is ApiCall.Success -> {
+                    _problem.value = null
+                    _receiptToShare.value = call.value
+                }
+
+                else -> _problem.value = problem(call)
+            }
+        }
+    }
+
+    fun clearReceiptToShare() {
+        _receiptToShare.value = null
+    }
+
+    /**
      * Back from the day's areas.
      *
      * A manager reached the network from his board, so the network is a step he took and can take back;

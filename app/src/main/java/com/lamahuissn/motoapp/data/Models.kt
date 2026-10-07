@@ -332,6 +332,8 @@ data class HouseReceipt(
     val methodLabel: String?,
     val collectedOn: String?,
     val collector: String?,
+    /** Who took it: the rule for sending a receipt again is the office's, and it is about this id. */
+    val collectorId: Int?,
     val note: String?,
     val lbpAmount: Int?,
     val settled: List<SettledLine> = emptyList(),

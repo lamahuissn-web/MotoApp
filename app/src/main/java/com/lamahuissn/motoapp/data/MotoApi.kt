@@ -167,6 +167,22 @@ object MotoApi {
     ) { parseHandover(it) }
 
     /**
+     * A receipt's own words, to send again (spec 011 §8).
+     *
+     * A household that lost the message in WhatsApp needs the words, not a file — and they come from the
+     * office's builder, so what arrives the second time is what was handed over the first time.
+     */
+    suspend fun receiptText(token: String, paymentId: Int): ApiCall<String> = call(
+        Request.Builder().url("$baseUrl/api/v1/receipts/$paymentId/text").authorized(token).build(),
+    ) { body -> parseReceiptText(body) }
+
+    /** The receipt's words, or nothing if the office sent none — an empty receipt is not a receipt. */
+    fun parseReceiptText(body: String): String? =
+        runCatching { JSONObject(body).optString("receipt_text") }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() && it != "null" }
+
+    /**
      * Take one receipt back (spec 009, phase C) — the most dangerous write this app makes.
      *
      * A written reason travels with it: it is what the audit trail will say in six months, and the desk
@@ -639,6 +655,7 @@ object MotoApi {
             methodLabel = row.optString("method_label").takeIf { it.isNotEmpty() && it != "null" },
             collectedOn = row.optString("collected_on").takeIf { it.isNotEmpty() && it != "null" },
             collector = row.optString("collector").takeIf { it.isNotEmpty() && it != "null" },
+            collectorId = row.optInt("collector_id").takeIf { !row.isNull("collector_id") },
             note = row.optString("note").takeIf { it.isNotEmpty() && it != "null" },
             lbpAmount = row.optInt("lbp_amount").takeIf { !row.isNull("lbp_amount") },
             settled = if (settled == null) {

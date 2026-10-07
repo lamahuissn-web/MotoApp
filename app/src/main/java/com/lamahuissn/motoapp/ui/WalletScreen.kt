@@ -25,12 +25,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,7 +61,20 @@ fun WalletScreen(
     refreshing: Boolean = false,
     onPullRefresh: () -> Unit = {},
     onOpenHouse: (houseId: Int, name: String) -> Unit = { _, _ -> },
+    receiptToShare: String? = null,
+    onSendReceipt: (paymentId: Int) -> Unit = {},
+    onShareDone: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+
+    // The office's words, handed to whatever the phone uses for messages — and the state is cleared so the
+    // same receipt is not sent twice by a recomposition.
+    LaunchedEffect(receiptToShare) {
+        val text = receiptToShare ?: return@LaunchedEffect
+        shareReceipt(context, text)
+        onShareDone()
+    }
+
     var confirmingSignOut by remember { mutableStateOf(false) }
 
     Column(
@@ -99,6 +114,11 @@ fun WalletScreen(
                     ) {
                         if (staleAsOf != null) {
                             item { StaleNote(asOf = staleAsOf) }
+                        }
+
+                        // A tap that failed says so in the office's own sentence rather than doing nothing.
+                        if (problem != null) {
+                            item { Alert(text = problem.message, tone = Tone.Danger) }
                         }
 
                         item {
@@ -270,6 +290,10 @@ fun WalletScreen(
                                                 onClick = {
                                                     onOpenHouse(receipt.houseId, receipt.house.orEmpty())
                                                 },
+                                                // A receipt the household lost is sent again from here (spec
+                                                // 011 §8) — every row in this list is his own, which is
+                                                // exactly what the receipt endpoint allows.
+                                                onSend = { onSendReceipt(receipt.id) },
                                             )
                                         }
                                     }
@@ -364,6 +388,7 @@ private fun ReviewRow(
     value: String,
     note: String? = null,
     onClick: () -> Unit,
+    onSend: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -385,6 +410,18 @@ private fun ReviewRow(
         }
 
         Amount(value = value, style = MaterialTheme.typography.bodyMedium)
+
+        if (onSend != null) {
+            TextButton(
+                onClick = onSend,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.share_receipt),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
     }
 }
 

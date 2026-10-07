@@ -105,6 +105,10 @@ fun HouseScreen(
     reversal: Load<ReversalAnswer> = Load.Idle,
     onReverse: (paymentId: Int, reason: String) -> Unit = { _, _ -> },
     onCloseReversal: () -> Unit = {},
+    myId: Int? = null,
+    receiptToShare: String? = null,
+    onSendReceipt: (paymentId: Int) -> Unit = {},
+    onShareDone: () -> Unit = {},
 ) {
     val house = (load as? Load.Ready)?.value
     // The receipt a manager is taking back (spec 009, phase C). Only a manager ever sets this: the button
@@ -117,6 +121,16 @@ fun HouseScreen(
     // with the keyboard up, and «did it go through?» has to be answered without him hunting for it.
     LaunchedEffect(outcome) {
         if (outcome != null) scroll.animateScrollTo(0)
+    }
+
+    // A receipt sent again for a household that lost it (spec 011 §8): the office's words, out through
+    // whatever the phone uses for messages, and the state cleared so it is not sent twice.
+    val shareContext = LocalContext.current
+
+    LaunchedEffect(receiptToShare) {
+        val text = receiptToShare ?: return@LaunchedEffect
+        shareReceipt(shareContext, text)
+        onShareDone()
     }
 
     // The view follows what just happened: a receipt belongs on the payment panel, a recorded reading
@@ -189,6 +203,15 @@ fun HouseScreen(
 
         // …and whatever is still owed to the office is never more than a tap away, on the screen where
         // the collector is most likely to be holding cash (spec 010).
+        // A tap that failed says so, in the office's own sentence.
+        if (problem != null) {
+            Alert(
+                text = problem.message,
+                tone = Tone.Danger,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            )
+        }
+
         if (queueOwed > 0) {
             QueueCard(
                 owed = queueOwed,
@@ -343,6 +366,8 @@ fun HouseScreen(
                                     canReverse = canReverse,
                                     onGoCollect = { view = VIEW_PAYMENT },
                                     onGoReading = { view = VIEW_READING },
+                                    myId = myId,
+                                    onSendReceipt = onSendReceipt,
                                     onReverse = { receipt ->
                                         onCloseReversal()
                                         reversalFor = ReceiptFace(
@@ -380,23 +405,6 @@ fun HouseScreen(
             },
         )
     }
-}
-
-/**
- * Hand the receipt to whatever the phone uses for messages.
- *
- * The office writes it, the phone only carries it: WhatsApp (or whatever the household actually uses)
- * receives the office's own words, so a receipt held in a street and one held at the counter cannot
- * drift apart. No permission, no account, no service of ours in the middle.
- */
-private fun shareReceipt(context: Context, receipt: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.receipt_heading))
-        putExtra(Intent.EXTRA_TEXT, receipt)
-    }
-
-    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_receipt)))
 }
 
 /** Who this is: the panel's tile, the name, the type and state badges, and the meta grid. */
@@ -540,6 +548,8 @@ private fun OverviewPanel(
     onGoCollect: () -> Unit,
     onGoReading: () -> Unit,
     onReverse: (HouseReceipt) -> Unit,
+    myId: Int?,
+    onSendReceipt: (paymentId: Int) -> Unit,
 ) {
     val bill = house.bills.lastOrNull()
 
@@ -724,6 +734,20 @@ private fun OverviewPanel(
                         }
 
                         Amount(value = Money.usd(receipt.amount), style = MaterialTheme.typography.titleSmall)
+
+                        if (canReverse || (myId != null && receipt.collectorId == myId)) {
+                            // Sending a receipt again is the collector's own receipt or the office's — the
+                            // same rule the receipt endpoint enforces, answered before the tap.
+                            TextButton(
+                                onClick = { onSendReceipt(receipt.id) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.share_receipt),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
 
                         if (canReverse) {
                             // The receipt's own log is where a manager takes one back: here he sees the whole

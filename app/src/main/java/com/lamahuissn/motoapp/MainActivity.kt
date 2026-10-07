@@ -123,6 +123,7 @@ private fun MotoApp(model: MotoViewModel) {
     val queue by model.queue.collectAsState()
     val reversal by model.reversal.collectAsState()
     val wallet by model.wallet.collectAsState()
+    val receiptToShare by model.receiptToShare.collectAsState()
 
     // The phone should be able to tell him, unopened, that his recorded work has not reached the office
     // (spec 010). Asked once, from Android 13 up; a refusal costs the notifications and nothing else.
@@ -243,6 +244,11 @@ private fun MotoApp(model: MotoViewModel) {
                 reversal = reversal,
                 onReverse = model::reverseReceipt,
                 onCloseReversal = model::clearReversal,
+                // Which receipts are his own to send again — the endpoint's rule, drawn ahead of the tap.
+                myId = session?.user?.id,
+                receiptToShare = receiptToShare,
+                onSendReceipt = model::shareReceiptAgain,
+                onShareDone = model::clearReceiptToShare,
             )
         }
 
@@ -257,6 +263,9 @@ private fun MotoApp(model: MotoViewModel) {
                 refreshing = refreshing,
                 onPullRefresh = model::refresh,
                 onOpenHouse = model::openHouseFromWallet,
+                receiptToShare = receiptToShare,
+                onSendReceipt = model::shareReceiptAgain,
+                onShareDone = model::clearReceiptToShare,
             )
         }
 

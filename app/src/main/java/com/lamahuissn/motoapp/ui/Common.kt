@@ -60,6 +60,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import android.content.Context
+import android.content.Intent
 import androidx.compose.ui.unit.sp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.ReversalAnswer
@@ -966,4 +968,24 @@ fun ReversalDialog(
             },
         )
     }
+}
+
+/**
+ * Hand the receipt to whatever the phone uses for messages.
+ *
+ * The office writes it, the phone only carries it: WhatsApp (or whatever the household actually uses)
+ * receives the office's own words, so a receipt held in a street and one held at the counter cannot drift
+ * apart. No permission, no account, no service of ours in the middle.
+ *
+ * It lives here rather than on one screen because two screens now send a receipt: the one that just took the
+ * money, and the purse's review where an old one is sent again to a household that lost it.
+ */
+fun shareReceipt(context: Context, receipt: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.receipt_heading))
+        putExtra(Intent.EXTRA_TEXT, receipt)
+    }
+
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_receipt)))
 }

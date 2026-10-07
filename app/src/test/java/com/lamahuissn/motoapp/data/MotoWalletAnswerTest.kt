@@ -137,6 +137,21 @@ class MotoWalletAnswerTest {
     }
 
     @Test
+    fun `the words of an old receipt are read, and an empty one is refused`() {
+        val text = MotoApi.parseReceiptText(
+            """{"receipt_text":"شركة المولّد\nإيصال قبض · PAY-2026-10-0009\nالبيت: بيت العيّنة",
+                "payment":{"id":41,"number":"PAY-2026-10-0009","amount":"25.00","collector_id":3}}""",
+        )
+
+        assertNotNull(text)
+        assertTrue(text!!.contains("PAY-2026-10-0009"))
+
+        // A receipt with no words is not a receipt: nothing is sent rather than an empty message.
+        assertNull(MotoApi.parseReceiptText("""{"payment":{"id":41}}"""))
+        assertNull(MotoApi.parseReceiptText("not json at all"))
+    }
+
+    @Test
     fun `an answer that is not a purse is refused, not guessed at`() {
         assertNull(MotoApi.parseWallet("""{"period":"2026-10"}"""))
         assertNull(MotoApi.parseWallet("not json at all"))
