@@ -798,6 +798,13 @@ private fun ReadingPanel(
         return
     }
 
+    // The three fields the form needs are declared out here, above both branches, so that the meter log
+    // below renders in EITHER state. It used to be that a recorded month returned early and took the
+    // history with it — and that is the one state where the history is what a person came to read.
+    var current by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
+    var estimatedOpen by rememberSaveable { mutableStateOf(false) }
+
     if (house.readingDone) {
         MotoCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -826,63 +833,58 @@ private fun ReadingPanel(
             }
         }
 
-        return
-    }
+    } else {
+        MotoCard {
+            Text(stringResource(R.string.take_reading), style = MaterialTheme.typography.titleSmall)
 
-    var current by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
-    var estimatedOpen by rememberSaveable { mutableStateOf(false) }
+            Spacer(Modifier.height(4.dp))
 
-    MotoCard {
-        Text(stringResource(R.string.take_reading), style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = stringResource(R.string.read_previous_hint, house.previousValue),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-        Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(14.dp))
 
-        Text(
-            text = stringResource(R.string.read_previous_hint, house.previousValue),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            FieldBox(
+                label = stringResource(R.string.read_current),
+                value = current,
+                onChange = { current = it },
+                keyboard = KeyboardType.Decimal,
+                align = TextAlign.Center,
+                textSize = 24.sp,
+                placeholder = "0",
+            )
 
-        Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
 
-        FieldBox(
-            label = stringResource(R.string.read_current),
-            value = current,
-            onChange = { current = it },
-            keyboard = KeyboardType.Decimal,
-            align = TextAlign.Center,
-            textSize = 24.sp,
-            placeholder = "0",
-        )
+            FieldBox(
+                label = stringResource(R.string.field_note),
+                value = note,
+                onChange = { note = it },
+                keyboard = KeyboardType.Text,
+                placeholder = "",
+            )
 
-        Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
 
-        FieldBox(
-            label = stringResource(R.string.field_note),
-            value = note,
-            onChange = { note = it },
-            keyboard = KeyboardType.Text,
-            placeholder = "",
-        )
+            PrimaryButton(
+                text = stringResource(R.string.read_save),
+                onClick = { onRead(current.trim(), note.takeIf { it.isNotBlank() }, false, "", null) },
+                enabled = current.isNotBlank(),
+                busy = busy,
+            )
 
-        Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
 
-        PrimaryButton(
-            text = stringResource(R.string.read_save),
-            onClick = { onRead(current.trim(), note.takeIf { it.isNotBlank() }, false, "", null) },
-            enabled = current.isNotBlank(),
-            busy = busy,
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        OutlineButton(
-            text = stringResource(R.string.read_estimated_open),
-            onClick = { estimatedOpen = true },
-            modifier = Modifier.fillMaxWidth(),
-            tone = Tone.Warning,
-        )
+            OutlineButton(
+                text = stringResource(R.string.read_estimated_open),
+                onClick = { estimatedOpen = true },
+                modifier = Modifier.fillMaxWidth(),
+                tone = Tone.Warning,
+            )
+        }
     }
 
     // Every month this meter has been read — the log the panel keeps in the file, and the one a household
