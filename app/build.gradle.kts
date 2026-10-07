@@ -42,7 +42,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 9
-        versionName = "0.5.0"
+        versionName = "0.5.1"
 
         // The office reaches the panel through the Cloudflare tunnel, and the phone reaches the same
         // one: one host, one door, no second network to keep alive. A build that pointed somewhere

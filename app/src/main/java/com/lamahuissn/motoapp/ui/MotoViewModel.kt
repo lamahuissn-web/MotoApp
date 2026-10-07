@@ -23,6 +23,7 @@ import com.lamahuissn.motoapp.data.QueueDecision
 import com.lamahuissn.motoapp.data.QueueRunner
 import com.lamahuissn.motoapp.data.QueueState
 import com.lamahuissn.motoapp.data.QueuedWrite
+import com.lamahuissn.motoapp.data.ReadingSuspicion
 import com.lamahuissn.motoapp.data.ReadingAnswer
 import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.ReversalAnswer
@@ -924,6 +925,11 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
             estimatedKwh = if (estimated) estimatedKwh else null,
             reason = reason,
             note = note,
+            // A number the office will question (a jump over this household's own average, or a meter that
+            // has not moved) travels ALREADY ANSWERED: the man was shown the warning as he typed and the
+            // button he pressed said «الرقم صحيح — سجِّل القراءة». A reading that arrives without this —
+            // from an older build, the sheet, the portal — is still questioned by the engine.
+            confirmedAnomaly = ! estimated && ReadingSuspicion.check(house, currentReading) != null,
         )
 
         walk(listOf(owedDuplicate(me, candidate) ?: candidate), report = true)

@@ -157,6 +157,9 @@
     <string name="question_confirm">الرقم صحيح — أرسلها</string>
     <string name="question_open_queue">افتح الطابور</string>
     <string name="reading_confirmed_badge">أُكِّدت بعد تحذير</string>
+    <string name="read_save_confirmed">الرقم صحيح — سجِّل القراءة</string>
+    <string name="suspect_zero">العدّاد لم يتحرّك: القراءة مثل السابقة. أصلح الرقم أو أكِّده.</string>
+    <string name="suspect_jump">قراءة كبيرة: الاستهلاك %1$s كيلوواط ومعدّل البيت %2$s. تأكّد من الرقم.</string>
     <string name="correction_balance_after">رصيد البيت الآن: %1$s</string>
     <string name="app_version">MotoApp %1$s</string>
     <string name="house_no_readings">لا قراءات سابقة على هذا العدّاد.</string>

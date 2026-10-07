@@ -65,6 +65,7 @@ import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.CorrectionAnswer
 import com.lamahuissn.motoapp.data.House
 import com.lamahuissn.motoapp.data.QueuedWrite
+import com.lamahuissn.motoapp.data.ReadingSuspicion
 import com.lamahuissn.motoapp.data.ReadingLogRow
 import com.lamahuissn.motoapp.data.ReceiptMessage
 import com.lamahuissn.motoapp.data.HouseReceipt
@@ -943,10 +944,26 @@ private fun ReadingPanel(
                 placeholder = "",
             )
 
+            // The office's own question, asked here and now — while the man can still walk back to the
+            // meter and read the digits again. Nothing has been written or sent yet (spec 013).
+            val suspicion = ReadingSuspicion.check(house, current)
+
+            if (suspicion != null) {
+                Spacer(Modifier.height(10.dp))
+                Alert(
+                    text = suspicionText(suspicion),
+                    tone = if (suspicion.verdict == ReadingSuspicion.Verdict.JUMP) Tone.Warning else Tone.Danger,
+                )
+            }
+
             Spacer(Modifier.height(14.dp))
 
             PrimaryButton(
-                text = stringResource(R.string.read_save),
+                // A number the office will question cannot be sent with the same finger that sends an
+                // ordinary one: the button itself says what pressing it means.
+                text = stringResource(
+                    if (suspicion != null) R.string.read_save_confirmed else R.string.read_save,
+                ),
                 onClick = { onRead(current.trim(), note.takeIf { it.isNotBlank() }, false, "", null) },
                 enabled = current.isNotBlank(),
                 busy = busy,
@@ -1372,4 +1389,16 @@ private fun billStatusTone(remaining: String, paid: String): Tone = when {
     remaining == "0.00" -> Tone.Success
     paid != "0.00" -> Tone.Warning
     else -> Tone.Danger
+}
+
+/** The office's question in the office's words, with this household's own numbers in it. */
+@Composable
+private fun suspicionText(warning: ReadingSuspicion.Warning): String = when (warning.verdict) {
+    ReadingSuspicion.Verdict.ZERO -> stringResource(R.string.suspect_zero)
+
+    ReadingSuspicion.Verdict.JUMP -> stringResource(
+        R.string.suspect_jump,
+        "%.0f".format(warning.consumption),
+        "%.0f".format(warning.average ?: 0.0),
+    )
 }
