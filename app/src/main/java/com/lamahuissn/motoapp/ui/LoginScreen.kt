@@ -42,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.lamahuissn.motoapp.BuildConfig
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.MotoApi
 
@@ -184,6 +185,14 @@ fun LoginScreen(
                 text = MotoApi.baseUrl,
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Which build is on this phone, in writing. Asked and answered once already («هل هذه الحزمة
+            // الجديدة؟»): the answer must be readable on the screen, not remembered from a chat.
+            Text(
+                text = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

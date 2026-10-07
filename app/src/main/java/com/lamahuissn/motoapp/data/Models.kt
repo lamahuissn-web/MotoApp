@@ -179,6 +179,13 @@ data class AreaSheet(
 
 data class House(
     val id: Int,
+    /**
+     * The cycle this file is read as of (`2026-10`) — the month the office is standing in.
+     *
+     * The phone needs it for one sentence: which row of the meter log is «هذا الشهر», so a log that
+     * repeats this month's figures under this month's card does not read as a duplicate.
+     */
+    val period: String = "",
     val name: String,
     val phone: String?,
     val type: String,

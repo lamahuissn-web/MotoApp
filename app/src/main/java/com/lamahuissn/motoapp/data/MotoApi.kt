@@ -484,6 +484,7 @@ object MotoApi {
 
     private fun parseHouse(row: JSONObject): House = House(
         id = row.optInt("id"),
+        period = row.optString("period"),
         name = row.optString("name"),
         phone = row.optString("phone").takeIf { it.isNotEmpty() && it != "null" },
         type = row.optString("type"),

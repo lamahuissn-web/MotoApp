@@ -131,6 +131,8 @@
     <string name="house_readings">سجل القراءات</string>
     <string name="reading_kwh">%1$s kWh</string>
     <string name="reading_estimated_badge">تقديرية</string>
+    <string name="reading_this_month">هذا الشهر</string>
+    <string name="app_version">MotoApp %1$s</string>
     <string name="house_no_readings">لا قراءات سابقة على هذا العدّاد.</string>
     <string name="receipt_settled_line">سُدّد %1$s · %2$s</string>
     <string name="receipt_remaining_line">متبقٍ %1$s</string>

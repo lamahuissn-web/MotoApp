@@ -898,7 +898,20 @@ private fun ReadingPanel(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(row.label, style = MaterialTheme.typography.bodyMedium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(row.label, style = MaterialTheme.typography.bodyMedium)
+
+                                    // The cycle the file is read as of, marked: the card above already shows
+                                    // this month's pair, and a log that repeats it unlabelled reads as a
+                                    // duplicate rather than as history.
+                                    if (row.period == house.period) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Badge(
+                                            text = stringResource(R.string.reading_this_month),
+                                            tone = Tone.Neutral,
+                                        )
+                                    }
+                                }
                                 MicroLabel(listOfNotNull(row.reader, row.readOn).joinToString(" · "))
                             }
 
