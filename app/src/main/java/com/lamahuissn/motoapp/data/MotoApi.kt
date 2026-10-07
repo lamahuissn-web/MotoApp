@@ -431,6 +431,8 @@ object MotoApi {
             handedTotal = money.optString("handed_total"),
             readingsToday = readings?.optInt("today") ?: 0,
             readingsCycle = readings?.optInt("cycle") ?: 0,
+            receipts = row.optJSONArray("receipts").toWalletReceipts(),
+            invoices = row.optJSONArray("invoices").toInvoices(),
             handovers = if (handovers == null) {
                 emptyList()
             } else {
@@ -446,6 +448,42 @@ object MotoApi {
                 }
             },
         )
+    }
+
+    private fun JSONArray?.toWalletReceipts(): List<WalletReceipt> {
+        if (this == null) return emptyList()
+
+        return (0 until length()).map { i ->
+            val row = getJSONObject(i)
+
+            WalletReceipt(
+                id = row.optInt("id"),
+                number = row.optString("number").takeIf { it.isNotEmpty() && it != "null" },
+                houseId = row.optInt("subscriber_id"),
+                house = row.optString("subscriber").takeIf { it.isNotEmpty() && it != "null" },
+                amount = row.optString("amount"),
+                collectedOn = row.optString("collected_on").takeIf { it.isNotEmpty() && it != "null" },
+            )
+        }
+    }
+
+    private fun JSONArray?.toInvoices(): List<WalletInvoice> {
+        if (this == null) return emptyList()
+
+        return (0 until length()).map { i ->
+            val row = getJSONObject(i)
+
+            WalletInvoice(
+                id = row.optInt("id"),
+                number = row.optString("number").takeIf { it.isNotEmpty() && it != "null" },
+                houseId = row.optInt("subscriber_id"),
+                house = row.optString("subscriber").takeIf { it.isNotEmpty() && it != "null" },
+                label = row.optString("label").takeIf { it.isNotEmpty() && it != "null" },
+                total = row.optString("total"),
+                consumption = row.optString("consumption").takeIf { it.isNotEmpty() && it != "null" },
+                remaining = row.optString("remaining"),
+            )
+        }
     }
 
     fun parseManagerBoard(body: String): ManagerBoard? {

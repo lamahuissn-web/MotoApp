@@ -256,6 +256,7 @@ private fun MotoApp(model: MotoViewModel) {
                 staleAsOf = staleAsOf,
                 refreshing = refreshing,
                 onPullRefresh = model::refresh,
+                onOpenHouse = model::openHouseFromWallet,
             )
         }
 

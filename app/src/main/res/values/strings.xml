@@ -278,6 +278,11 @@
     <string name="wallet_readings">قراءاتي</string>
     <string name="wallet_cycle">هذه الدورة</string>
     <string name="wallet_handovers">آخر تسليماتي</string>
+    <string name="wallet_review">مراجعتي</string>
+    <string name="wallet_my_receipts">إيصالاتي</string>
+    <string name="wallet_my_invoices">فواتير قراءاتي</string>
+    <string name="wallet_no_receipts">لم تقبض شيئًا بعد.</string>
+    <string name="wallet_no_invoices">لا فواتير أنتجتها قراءاتك هذه الدورة بعد.</string>
     <string name="wallet_received_by">استلمه %1$s</string>
     <string name="wallet_none">لا حركة بعد — لا قبض ولا تسليم.</string>
     <string name="cash_handed_line">سلّمت للمولّد حتى الآن %1$s</string>

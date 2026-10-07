@@ -1,6 +1,7 @@
 package com.lamahuissn.motoapp.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lamahuissn.motoapp.R
 import com.lamahuissn.motoapp.data.WalletSummary
@@ -56,6 +58,7 @@ fun WalletScreen(
     staleAsOf: String? = null,
     refreshing: Boolean = false,
     onPullRefresh: () -> Unit = {},
+    onOpenHouse: (houseId: Int, name: String) -> Unit = { _, _ -> },
 ) {
     var confirmingSignOut by remember { mutableStateOf(false) }
 
@@ -236,6 +239,89 @@ fun WalletScreen(
                             }
                         }
 
+                        // His review (spec 011 §7): the lines behind the cash, and what his readings
+                        // produced. The wallet answers «how much»; this answers «which ones» — which is the
+                        // question a man asks himself before he signs his money over.
+                        item { SectionHeading(stringResource(R.string.wallet_review)) }
+
+                        item {
+                            MotoCard(padding = 14.dp) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = stringResource(R.string.wallet_my_receipts),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    MicroLabel(purse.receipts.size.toString())
+                                }
+
+                                Spacer(Modifier.height(10.dp))
+
+                                if (purse.receipts.isEmpty()) {
+                                    MicroLabel(stringResource(R.string.wallet_no_receipts))
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        purse.receipts.forEach { receipt ->
+                                            ReviewRow(
+                                                title = receipt.house.orEmpty(),
+                                                sub = listOfNotNull(receipt.collectedOn, receipt.number)
+                                                    .joinToString(" · "),
+                                                value = Money.usd(receipt.amount),
+                                                onClick = {
+                                                    onOpenHouse(receipt.houseId, receipt.house.orEmpty())
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            MotoCard(padding = 14.dp) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = stringResource(R.string.wallet_my_invoices),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    MicroLabel(purse.invoices.size.toString())
+                                }
+
+                                Spacer(Modifier.height(10.dp))
+
+                                if (purse.invoices.isEmpty()) {
+                                    MicroLabel(stringResource(R.string.wallet_no_invoices))
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        purse.invoices.forEach { invoice ->
+                                            ReviewRow(
+                                                title = invoice.house.orEmpty(),
+                                                sub = listOfNotNull(
+                                                    invoice.label,
+                                                    invoice.consumption?.let {
+                                                        stringResource(R.string.reading_kwh, it)
+                                                    },
+                                                ).joinToString(" · "),
+                                                value = Money.usd(invoice.total),
+                                                note = if (invoice.remaining != "0.00") {
+                                                    stringResource(
+                                                        R.string.receipt_remaining_line,
+                                                        Money.usd(invoice.remaining),
+                                                    )
+                                                } else {
+                                                    null
+                                                },
+                                                onClick = {
+                                                    onOpenHouse(invoice.houseId, invoice.house.orEmpty())
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         if (purse.untouched) {
                             item {
                                 Alert(
@@ -264,6 +350,41 @@ fun WalletScreen(
                 TextButton(onClick = { confirmingSignOut = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
+    }
+}
+
+/**
+ * One line of his own review: the house, what it was, and the figure — tappable, because the next thing he
+ * wants after «which one?» is «let me see that house».
+ */
+@Composable
+private fun ReviewRow(
+    title: String,
+    sub: String,
+    value: String,
+    note: String? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (sub.isNotEmpty()) {
+                MicroLabel(sub)
+            }
+            note?.let { MicroLabel(it, tone = Tone.Danger) }
+        }
+
+        Amount(value = value, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

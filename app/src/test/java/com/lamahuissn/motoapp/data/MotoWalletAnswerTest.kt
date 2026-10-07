@@ -87,6 +87,56 @@ class MotoWalletAnswerTest {
     }
 
     @Test
+    fun `his review carries his receipts and the invoices his readings produced`() {
+        val body = """
+            {"user":{"id":3,"name":"سليم ميعاري","role":"collector"},"period":"2026-10",
+             "label":"تشرين الأول 2026",
+             "money":{"in_hand":"70.00","today_total":"40.00","today_count":2,"month_total":"70.00",
+                      "month_count":3,"handed_total":"0.00"},
+             "readings":{"today":1,"cycle":1},
+             "receipts":[
+               {"id":41,"number":"PAY-2026-10-0009","subscriber_id":12,"subscriber":"بيت العيّنة",
+                "amount":"25.00","collected_on":"2026-10-06"}],
+             "invoices":[
+               {"id":88,"number":"INV-2026-10-0023","subscriber_id":12,"subscriber":"بيت العيّنة",
+                "period":"2026-10","label":"تشرين الأول 2026","total":"45.00","consumption":"120.00",
+                "remaining":"30.00"}],
+             "handovers":[]}
+        """.trimIndent()
+
+        val wallet = MotoApi.parseWallet(body)!!
+
+        assertEquals(1, wallet.receipts.size)
+        assertEquals(12, wallet.receipts[0].houseId)
+        assertEquals("بيت العيّنة", wallet.receipts[0].house)
+        assertEquals("25.00", wallet.receipts[0].amount)
+        assertEquals("2026-10-06", wallet.receipts[0].collectedOn)
+
+        assertEquals(1, wallet.invoices.size)
+        assertEquals("تشرين الأول 2026", wallet.invoices[0].label)
+        assertEquals("45.00", wallet.invoices[0].total)
+        assertEquals("120.00", wallet.invoices[0].consumption)
+        // What is still open on his invoice — the office's figure, not the phone's subtraction.
+        assertEquals("30.00", wallet.invoices[0].remaining)
+    }
+
+    @Test
+    fun `a purse with no review is still a purse`() {
+        // An older answer (or a collector who has just signed in): the keys are simply absent.
+        val body = """
+            {"user":{"id":3,"name":"سليم ميعاري","role":"collector"},"period":"2026-10","label":"تشرين الأول 2026",
+             "money":{"in_hand":"0.00","today_total":"0.00","today_count":0,"month_total":"0.00",
+                      "month_count":0,"handed_total":"0.00"},
+             "readings":{"today":0,"cycle":0}}
+        """.trimIndent()
+
+        val wallet = MotoApi.parseWallet(body)!!
+
+        assertEquals(0, wallet.receipts.size)
+        assertEquals(0, wallet.invoices.size)
+    }
+
+    @Test
     fun `an answer that is not a purse is refused, not guessed at`() {
         assertNull(MotoApi.parseWallet("""{"period":"2026-10"}"""))
         assertNull(MotoApi.parseWallet("not json at all"))

@@ -118,12 +118,42 @@ data class WalletSummary(
     val readingsToday: Int,
     val readingsCycle: Int,
     val handovers: List<WalletHandover> = emptyList(),
+    /** His own review (spec 011 §7): the lines behind the cash, and what his readings produced. */
+    val receipts: List<WalletReceipt> = emptyList(),
+    val invoices: List<WalletInvoice> = emptyList(),
 ) {
     /** A purse with nothing in it and nothing done — the screen says so instead of a wall of zeroes. */
     val untouched: Boolean
         get() = inHand == "0.00" && todayCount == 0 && monthCount == 0 &&
             handedTotal == "0.00" && readingsToday == 0 && readingsCycle == 0 && handovers.isEmpty()
 }
+
+/** One of his own receipts: the line behind the cash he is carrying. */
+data class WalletReceipt(
+    val id: Int,
+    val number: String?,
+    val houseId: Int,
+    val house: String?,
+    val amount: String,
+    val collectedOn: String?,
+)
+
+/**
+ * One invoice his reading produced this cycle.
+ *
+ * The link is the engine's (`bills.reading_id`) — the phone never guesses which invoice followed which
+ * reading. `remaining` is the office's figure: what is still open on it, or nothing if it is settled.
+ */
+data class WalletInvoice(
+    val id: Int,
+    val number: String?,
+    val houseId: Int,
+    val house: String?,
+    val label: String?,
+    val total: String,
+    val consumption: String?,
+    val remaining: String,
+)
 
 /** One handover the office signed for. */
 data class WalletHandover(

@@ -735,6 +735,16 @@ class MotoViewModel(application: Application) : AndroidViewModel(application) {
         _search.value = Load.Idle
     }
 
+    /**
+     * Open a household from the purse's review: there is no area sheet behind it, so back returns to the
+     * purse he was reading — the same road the search hits take.
+     */
+    fun openHouseFromWallet(houseId: Int, name: String) {
+        houseOrigin = Screen.Wallet
+        _screen.value = Screen.House(areaId = 0, areaName = name, houseId = houseId)
+        loadHouse(houseId)
+    }
+
     /** Open a household found by search: there is no area sheet behind it, so going back goes home. */
     fun openSearchHit(hit: SearchHit) {
         clearSearch()
